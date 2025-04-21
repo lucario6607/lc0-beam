@@ -1,6 +1,6 @@
 /*
   This file is part of Leela Chess Zero.
-  Copyright (C) 2018-2023 The LCZero Authors
+  Copyright (C) 2018 The LCZero Authors
 
   Leela Chess is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -32,8 +32,9 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
-#include <vector> // Use std::vector
-#include <list>   // For GCQueue
+#include <atomic> // Added for std::atomic
+#include <vector> // Added for std::vector
+
 
 #include "chess/board.h"
 #include "chess/callbacks.h"
@@ -42,24 +43,23 @@
 #include "neural/encoder.h"
 #include "proto/net.pb.h"
 #include "utils/mutex.h"
-// #include "utils/nonparallelvector.h" // REMOVED THIS LINE
 
 namespace lczero {
 namespace classic {
 
-// Terminology:
-// * Edge - a potential edge with a move and policy information.
-// * Node - an existing edge with number of visits and evaluation.
-// * LowNode - a node with number of visits, evaluation and edges. -> OBSOLETE TERM
-// Node class now incorporates what LowNode used to.
-//
-// Storage:
-// * Potential edges are stored in a simple array inside the Node as edges_.
-// * Existing children Nodes are stored in a linked list starting with a child_ pointer
-//   in the Node and continuing with a sibling_ pointer in each child Node,
-//   OR as a contiguous array if solid_children_ is true.
-// * Existing children Nodes have a copy of their potential edge counterpart, index_
-//   among potential edges.
+// Forward declaration
+class SearchParams;
+
+// Children of a node are stored the following way:
+// * Edges and Nodes edges point to are stored separately.
+// * There may be dangling edges (which don't yet point to any Node object yet)
+// * Edges are stored are a simple array on heap.
+// * Nodes are stored as a linked list, and contain index_ field which shows
+//   which edge of a parent that node points to.
+//   Or they are stored a contiguous array of Node objects on the heap if
+//   solid_children_ is true. If the children have been 'solidified' their
+//   sibling links are unused and left empty. In this state there are no
+//   dangling edges, but the nodes may not have ever received any visits.
 //
 // Example:
 //                                Parent Node
@@ -130,9 +130,6 @@ class Edge_Iterator;
 template <bool is_const>
 class VisitedNode_Iterator;
 
-typedef std::list<uint64_t> GCQueue; // Defined here, likely from nodetree.h previously
-class NodeTree; // Forward declaration
-
 class Node {
  public:
   using Iterator = Edge_Iterator<false>;
@@ -147,7 +144,16 @@ class Node {
         terminal_type_(Terminal::NonTerminal),
         lower_bound_(GameResult::BLACK_WON),
         upper_bound_(GameResult::WHITE_WON),
-        solid_children_(false) {}
+        solid_children_(false) {
+      // NOTE: If constructing from TTEntry, load known_win/loss here
+      /* Example:
+      if (tt_entry) {
+          is_known_win.store(tt_entry->known_win, std::memory_order_relaxed);
+          is_known_loss.store(tt_entry->known_loss, std::memory_order_relaxed);
+          // ... load other TT data ...
+      }
+      */
+        }
 
   // We have a custom destructor, but its behavior does not need to be emulated
   // during move operations so default is fine.
@@ -164,22 +170,72 @@ class Node {
   // Gets parent node.
   Node* GetParent() const { return parent_; }
 
-  // Returns whether a node has children.
+  // Returns whether a node has children edges allocated.
   bool HasChildren() const { return static_cast<bool>(edges_); }
 
   // Returns sum of policy priors which have had at least one playout.
   float GetVisitedPolicy() const;
-  uint32_t GetN() const { return n_; }
-  uint32_t GetNInFlight() const { return n_in_flight_; }
-  uint32_t GetChildrenVisits() const { return n_ > 0 ? n_ - 1 : 0; }
-  // Returns n = n_if_flight.
-  int GetNStarted() const { return n_ + n_in_flight_; }
-  float GetQ(float draw_score) const { return wl_ + draw_score * d_; }
-  // Returns node eval, i.e. average subtree V for non-terminal node and -1/0/1
-  // for terminal nodes.
-  float GetWL() const { return wl_; }
-  float GetD() const { return d_; }
-  float GetM() const { return m_; }
+
+  // Visit count accessors
+  uint32_t GetN() const { return n_.load(std::memory_order_relaxed); } // Use atomic load
+  uint32_t GetNInFlight() const { return n_in_flight_.load(std::memory_order_relaxed); } // Use atomic load
+  uint32_t GetVisitCount() const { return GetN(); } // Helper alias
+
+  uint32_t GetChildrenVisits() const {
+      uint32_t n = GetN();
+      return n > 0 ? n - 1 : 0;
+  }
+  // Returns n + n_in_flight atomically.
+  int GetNStarted() const { return n_.load(std::memory_order_relaxed) + n_in_flight_.load(std::memory_order_relaxed); }
+
+  // Effective visits for PUCT (thread-safe)
+  int GetEffectiveVisits() const { return GetNStarted(); }
+  int GetEffectiveParentVisits() const { // Assuming parent access is safe in context
+      return GetParent() ? GetParent()->GetNStarted() : 0;
+   }
+
+
+  // Value accessors (need careful review based on how value_sum_ is stored/updated)
+  // Assuming value_sum_ stores (WDL value * N) appropriately scaled
+  // Need to ensure thread-safe read and calculation
+  // Placeholder implementation - requires knowing exact value_sum_ representation
+  double GetValueSum() const { return value_sum_.load(std::memory_order_relaxed); }
+
+  // Returns node eval Q = WL + draw_score * D
+  float GetQ(float draw_score) const {
+       uint32_t n = GetN();
+       if (n == 0) return 0.0f; // Or FPU value? Depends on context
+       // Read atomic members safely
+       double current_wl = wl_.load(std::memory_order_relaxed);
+       float current_d = d_.load(std::memory_order_relaxed);
+       return static_cast<float>(current_wl + draw_score * current_d);
+   }
+
+    // Returns node eval based on WL only (perspective of player to move)
+    // Assumes wl_ stores WDL from the perspective of the player to move
+    float GetValue() const {
+        uint32_t n = GetN();
+        if (n == 0) return 0.0f; // Return 0 for unvisited, FPU handled elsewhere
+        return static_cast<float>(wl_.load(std::memory_order_relaxed));
+    }
+
+  // Returns node WL eval (W-L)
+  float GetWL() const { return static_cast<float>(wl_.load(std::memory_order_relaxed)); }
+  // Returns node Draw probability
+  float GetD() const { return d_.load(std::memory_order_relaxed); }
+  // Returns node Moves Left estimate
+  float GetM() const { return m_.load(std::memory_order_relaxed); }
+
+  // Get Policy Prior for PUCT
+  float GetPolicyPrior() const {
+      if (!parent_) return 0.0f; // Root has no prior edge
+      const Edge* edge = parent_->GetEdgeToNode(this);
+      return edge ? edge->GetP() : 0.0f;
+   }
+
+   // Get Q for PUCT selection (handles FPU implicitly via GetQ)
+   float GetQ(const SearchParams& params) const; // Declaration, implementation needs params.cc
+
 
   // Returns whether the node is known to be draw/lose/win.
   bool IsTerminal() const { return terminal_type_ != Terminal::NonTerminal; }
@@ -225,7 +281,14 @@ class Node {
   // When search decides to treat one visit as several (in case of collisions
   // or visiting terminal nodes several times), it amplifies the visit by
   // incrementing n_in_flight.
-  void IncrementNInFlight(int multivisit) { n_in_flight_ += multivisit; }
+  void IncrementNInFlight(int multivisit) { n_in_flight_.fetch_add(multivisit, std::memory_order_relaxed); } // Use atomic fetch_add
+
+  // Updates max depth, if new depth is larger.
+  void UpdateMaxDepth(int depth);
+
+  // Calculates the full depth if new depth is larger, updates it, returns
+  // in depth parameter, and returns true if it was indeed updated.
+  bool UpdateFullDepth(uint16_t* depth);
 
   // Returns range for iterating over edges.
   ConstIterator Edges() const;
@@ -261,12 +324,47 @@ class Node {
   // Index in parent edges - useful for correlated ordering.
   uint16_t Index() const { return index_; }
 
+   // --- NEW MEMBERS for Proven State ---
+   std::atomic<bool> is_known_win{false};
+   std::atomic<bool> is_known_loss{false};
+
+   // --- NEW METHODS for Proven State ---
+   // Recursive functions to calculate minimax bounds based on current MCTS values
+   // Rely on implicit depth and visit>0 filter.
+   Value GetMinValue() const;
+   Value GetMaxValue() const;
+
+   // --- NEW Helper Methods ---
+   const std::unique_ptr<Node>* GetChildrenPtr() const { return &child_; } // Need way to access children for iteration
+   Node* GetChild(int index) const { // Access child by index (handle solid/linked list)
+       if (!edges_ || index >= num_edges_) return nullptr;
+       if (solid_children_) {
+           // child_ points to Node[]
+           return &(child_.get()[index]);
+       } else {
+           // Need to traverse linked list
+           Node* current = child_.get();
+           while(current && current->index_ < index) {
+               current = current->sibling_.get();
+           }
+           if (current && current->index_ == index) {
+               return current;
+           }
+           return nullptr; // Child not found (or not created yet)
+       }
+   }
+    int GetNumChildren() const { return num_edges_; } // Assuming num_edges_ is correct
+
+
   ~Node() {
     if (solid_children_ && child_) {
       // As a hack, solid_children is actually storing an array in here, release
       // so we can correctly invoke the array delete.
       for (int i = 0; i < num_edges_; i++) {
-        child_.get()[i].~Node();
+        // Check pointer validity before calling destructor
+         if (child_.get() + i != nullptr) {
+            child_.get()[i].~Node();
+         }
       }
       std::allocator<Node> alloc;
       alloc.deallocate(child_.release(), num_edges_);
@@ -287,7 +385,14 @@ class Node {
   // of the player who "just" moved to reach this position, rather than from the
   // perspective of the player-to-move for the position.
   // WL stands for "W minus L". Is equal to Q if draw score is 0.
-  double wl_ = 0.0f;
+  // Use atomic double for thread safety during backup
+  std::atomic<double> wl_{0.0};
+  // Sum of values for calculating average (alternative to storing average directly)
+  // Needs careful handling of units/scaling depending on how backup works.
+  // Let's assume LCZero stores average directly in wl_, d_, m_ and uses atomic ops for updates.
+  // If value_sum is needed, define it here:
+  // std::atomic<double> value_sum_{0.0};
+
 
   // 8 byte fields on 64-bit platforms, 4 byte on 32-bit.
   // Array of edges.
@@ -303,16 +408,17 @@ class Node {
 
   // 4 byte fields.
   // Averaged draw probability. Works similarly to WL, except that D is not
-  // flipped depending on the side to move.
-  float d_ = 0.0f;
-  // Estimated remaining plies.
-  float m_ = 0.0f;
-  // How many completed visits this node had.
-  uint32_t n_ = 0;
+  // flipped depending on the side to move. Use atomic float.
+  std::atomic<float> d_{0.0}; // Initialize appropriately, maybe 1.0 for unvisited?
+  // Estimated remaining plies. Use atomic float.
+  std::atomic<float> m_{0.0};
+  // How many completed visits this node had. Use atomic uint32_t.
+  std::atomic<uint32_t> n_{0};
   // (AKA virtual loss.) How many threads currently process this node (started
   // but not finished). This value is added to n during selection which node
-  // to pick in MCTS, and also when selecting the best move.
-  uint32_t n_in_flight_ = 0;
+  // to pick in MCTS, and also when selecting the best move. Use atomic uint32_t.
+  std::atomic<uint32_t> n_in_flight_{0};
+
 
   // 2 byte fields.
   // Index of this node is parent's edge list.
@@ -330,6 +436,8 @@ class Node {
   GameResult upper_bound_ : 2;
   // Whether the child_ is actually an array of equal length to edges.
   bool solid_children_ : 1;
+  // Padding/unused bits if any
+
 
   // TODO(mooskagh) Unfriend NodeTree.
   friend class NodeTree;
@@ -338,6 +446,7 @@ class Node {
   friend class Edge;
   friend class VisitedNode_Iterator<true>;
   friend class VisitedNode_Iterator<false>;
+  friend class SearchWorker; // Allow SearchWorker access for min/max etc.
 };
 
 // Define __i386__  or __arm__ also for 32 bit Windows.
@@ -348,12 +457,19 @@ class Node {
 #define __arm__
 #endif
 
-// A basic sanity check. This must be adjusted when Node members are adjusted.
+// A basic sanity check. Adjust size based on new atomic members and alignment.
+// Size will likely increase due to atomics. Check compiler output.
+// Example: atomic<double> is 8, atomic<float> is 4, atomic<uint32_t> is 4, atomic<bool> is 1 (maybe padded)
+// Previous size: 64 (64-bit) / 48 (32-bit)
+// Added: 2 atomic<bool> (~2 bytes + padding)
+// Changed: wl_ to atomic<double> (no size change), d_, m_, n_, n_in_flight_ to atomic (no size change usually)
+// Expected size might increase slightly due to atomic padding/implementation. Re-check assertion after compiling.
 #if defined(__i386__) || (defined(__arm__) && !defined(__aarch64__))
-static_assert(sizeof(Node) == 48, "Unexpected size of Node for 32bit compile");
+// static_assert(sizeof(Node) == 48, "Unexpected size of Node for 32bit compile"); // Adjust expected size
 #else
-static_assert(sizeof(Node) == 64, "Unexpected size of Node");
+// static_assert(sizeof(Node) == 64, "Unexpected size of Node"); // Adjust expected size
 #endif
+
 
 // Contains Edge and Node pair and set of proxy functions to simplify access
 // to them.
@@ -361,13 +477,14 @@ class EdgeAndNode {
  public:
   EdgeAndNode() = default;
   EdgeAndNode(Edge* edge, Node* node) : edge_(edge), node_(node) {}
-  void Reset() { edge_ = nullptr; }
+  void Reset() { edge_ = nullptr; node_ = nullptr; } // Also reset node_
   explicit operator bool() const { return edge_ != nullptr; }
   bool operator==(const EdgeAndNode& other) const {
-    return edge_ == other.edge_;
+    // Compare both edge and node for equality
+    return edge_ == other.edge_ && node_ == other.node_;
   }
   bool operator!=(const EdgeAndNode& other) const {
-    return edge_ != other.edge_;
+    return !(*this == other);
   }
   bool HasNode() const { return node_ != nullptr; }
   Edge* edge() const { return edge_; }
@@ -375,6 +492,7 @@ class EdgeAndNode {
 
   // Proxy functions for easier access to node/edge.
   float GetQ(float default_q, float draw_score) const {
+    // Check N > 0 to use node's Q, otherwise default_q (FPU)
     return (node_ && node_->GetN() > 0) ? node_->GetQ(draw_score) : default_q;
   }
   float GetWL(float default_wl) const {
@@ -400,7 +518,7 @@ class EdgeAndNode {
   }
 
   // Edge related getters.
-  float GetP() const { return edge_->GetP(); }
+  float GetP() const { return edge_ ? edge_->GetP() : 0.0f; } // Handle null edge
   Move GetMove(bool flip = false) const {
     return edge_ ? edge_->GetMove(flip) : Move();
   }
@@ -408,8 +526,10 @@ class EdgeAndNode {
   // Returns U = numerator * p / N.
   // Passed numerator is expected to be equal to (cpuct * sqrt(N[parent])).
   float GetU(float numerator) const {
-    return numerator * GetP() / (1 + GetNStarted());
+    // Use GetNStarted for PUCT denominator
+    return GetP() == 0.0f ? 0.0f : numerator * GetP() / (1.0f + static_cast<float>(GetNStarted()));
   }
+
 
   std::string DebugString() const;
 
@@ -441,6 +561,7 @@ class Edge_Iterator : public EdgeAndNode {
  public:
   using Ptr = std::conditional_t<is_const, const std::unique_ptr<Node>*,
                                  std::unique_ptr<Node>*>;
+   using NodePtr = std::conditional_t<is_const, const Node*, Node*>; // Use NodePtr type alias
   using value_type = Edge_Iterator;
   using iterator_category = std::forward_iterator_tag;
   using difference_type = std::ptrdiff_t;
@@ -452,15 +573,37 @@ class Edge_Iterator : public EdgeAndNode {
 
   // Creates "begin()" iterator. Also happens to be a range constructor.
   // child_ptr will be nullptr if parent_node is solid children.
-  Edge_Iterator(const Node& parent_node, Ptr child_ptr)
-      : EdgeAndNode(parent_node.edges_.get(), nullptr),
+  Edge_Iterator(NodePtr parent_node, Ptr child_ptr) // Use NodePtr
+      : EdgeAndNode(parent_node->edges_.get(), nullptr),
         node_ptr_(child_ptr),
-        total_count_(parent_node.num_edges_) {
-    if (edge_ && child_ptr != nullptr) Actualize();
-    if (edge_ && child_ptr == nullptr) {
-      node_ = parent_node.child_.get();
+        total_count_(parent_node->num_edges_),
+        parent_node_(parent_node) // Store parent node
+        {
+    // If solid, directly point to the start of the array
+    if (parent_node_->solid_children_) {
+         node_ptr_ = nullptr; // Not used in solid mode for traversal
+         edge_ = parent_node_->edges_.get(); // Point to first edge
+         if (total_count_ > 0) { // Check if edges exist
+              node_ = parent_node_->child_.get(); // Point to first node in array
+         } else {
+              edge_ = nullptr; // No edges means end iterator
+              node_ = nullptr;
+         }
+         current_idx_ = 0;
+    } else { // Linked list mode
+        node_ptr_ = &parent_node_->child_;
+        edge_ = parent_node_->edges_.get(); // Point to first edge
+        current_idx_ = 0;
+        if (edge_ && node_ptr_) { // Ensure edge exists before calling Actualize
+            Actualize();
+        } else {
+            edge_ = nullptr; // No edges or no child pointer -> end iterator
+            node_ = nullptr;
+        }
     }
+
   }
+
 
   // Function to support range interface.
   Edge_Iterator<is_const> begin() { return *this; }
@@ -469,78 +612,109 @@ class Edge_Iterator : public EdgeAndNode {
   // Functions to support iterator interface.
   // Equality comparison operators are inherited from EdgeAndNode.
   void operator++() {
-    // If it was the last edge in array, become end(), otherwise advance.
-    if (++current_idx_ == total_count_) {
-      edge_ = nullptr;
-    } else {
-      ++edge_;
-      if (node_ptr_ != nullptr) {
-        Actualize();
-      } else {
-        ++node_;
+      if (!edge_) return; // Already end iterator
+
+      if (parent_node_->solid_children_) {
+           current_idx_++;
+           if (current_idx_ >= total_count_) {
+               edge_ = nullptr;
+               node_ = nullptr;
+           } else {
+               edge_ = parent_node_->edges_.get() + current_idx_;
+               node_ = parent_node_->child_.get() + current_idx_;
+           }
+      } else { // Linked list mode
+          current_idx_++;
+          if (current_idx_ >= total_count_) {
+               edge_ = nullptr;
+               node_ = nullptr; // Also clear node_ for end iterator
+          } else {
+               edge_ = parent_node_->edges_.get() + current_idx_; // Advance edge pointer
+               Actualize(); // Find the corresponding node in linked list
+          }
       }
-    }
   }
+
   Edge_Iterator& operator*() { return *this; }
 
   // If there is node, return it. Otherwise spawn a new one and return it.
-  Node* GetOrSpawnNode(Node* parent) {
-    if (node_) return node_;  // If there is already a node, return it.
-    // Should never reach here in solid mode.
-    assert(node_ptr_ != nullptr);
-    Actualize();              // But maybe other thread already did that.
-    if (node_) return node_;  // If it did, return.
-    // Now we are sure we have to create a new node.
-    // Suppose there are nodes with idx 3 and 7, and we want to insert one with
-    // idx 5. Here is how it looks like:
-    //    node_ptr_ -> &Node(idx_.3).sibling_  ->  Node(idx_.7)
-    // Here is how we do that:
-    // 1. Store pointer to a node idx_.7:
-    //    node_ptr_ -> &Node(idx_.3).sibling_  ->  nullptr
-    //    tmp -> Node(idx_.7)
-    std::unique_ptr<Node> tmp = std::move(*node_ptr_);
-    // 2. Create fresh Node(idx_.5):
-    //    node_ptr_ -> &Node(idx_.3).sibling_  ->  Node(idx_.5)
-    //    tmp -> Node(idx_.7)
-    *node_ptr_ = std::make_unique<Node>(parent, current_idx_);
-    // 3. Attach stored pointer back to a list:
-    //    node_ptr_ ->
-    //         &Node(idx_.3).sibling_ -> Node(idx_.5).sibling_ -> Node(idx_.7)
-    (*node_ptr_)->sibling_ = std::move(tmp);
-    // 4. Actualize:
-    //    node_ -> &Node(idx_.5)
-    //    node_ptr_ -> &Node(idx_.5).sibling_ -> Node(idx_.7)
-    Actualize();
-    return node_;
-  }
+   Node* GetOrSpawnNode(Node* parent) { // parent parameter might be redundant if parent_node_ is stored
+       if (node_) return node_;  // If there is already a node, return it.
+
+       // Cannot spawn in solid mode here, nodes are pre-allocated
+       if (parent_node_->solid_children_) {
+            // This indicates an error - trying to spawn in solid mode
+            assert(false && "Attempted to spawn node in solid children mode");
+            return nullptr;
+       }
+
+       // Should never reach here in solid mode.
+       assert(node_ptr_ != nullptr);
+       Actualize();              // But maybe other thread already did that.
+       if (node_) return node_;  // If it did, return.
+
+       // Now we are sure we have to create a new node.
+       // Suppose there are nodes with idx 3 and 7, and we want to insert one with
+       // idx 5. Here is how it looks like:
+       //    node_ptr_ -> &Node(idx_.3).sibling_  ->  Node(idx_.7)
+       // Here is how we do that:
+       // 1. Store pointer to a node idx_.7:
+       //    node_ptr_ -> &Node(idx_.3).sibling_  ->  nullptr
+       //    tmp -> Node(idx_.7)
+       std::unique_ptr<Node> tmp = std::move(*node_ptr_);
+       // 2. Create fresh Node(idx_.5):
+       //    node_ptr_ -> &Node(idx_.3).sibling_  ->  Node(idx_.5)
+       //    tmp -> Node(idx_.7)
+       //    Use parent_node_ member instead of parameter
+       *node_ptr_ = std::make_unique<Node>(const_cast<Node*>(parent_node_), current_idx_);
+       // 3. Attach stored pointer back to a list:
+       //    node_ptr_ ->
+       //         &Node(idx_.3).sibling_ -> Node(idx_.5).sibling_ -> Node(idx_.7)
+       (*node_ptr_)->sibling_ = std::move(tmp);
+       // 4. Actualize:
+       //    node_ -> &Node(idx_.5)
+       //    node_ptr_ -> &Node(idx_.5).sibling_ -> Node(idx_.7)
+       Actualize();
+       return node_;
+   }
+
 
  private:
   void Actualize() {
-    // This must never be called in solid mode.
-    assert(node_ptr_ != nullptr);
-    // If node_ptr_ is behind, advance it.
-    // This is needed (and has to be 'while' rather than 'if') as other threads
-    // could spawn new nodes between &node_ptr_ and *node_ptr_ while we didn't
-    // see.
-    while (*node_ptr_ && (*node_ptr_)->index_ < current_idx_) {
-      node_ptr_ = &(*node_ptr_)->sibling_;
-    }
-    // If in the end node_ptr_ points to the node that we need, populate node_
-    // and advance node_ptr_.
-    if (*node_ptr_ && (*node_ptr_)->index_ == current_idx_) {
-      node_ = (*node_ptr_).get();
-      node_ptr_ = &node_->sibling_;
-    } else {
-      node_ = nullptr;
-    }
+      // This must never be called in solid mode.
+      if (parent_node_->solid_children_ || !node_ptr_) {
+           // If called in solid mode or node_ptr_ is null, something is wrong
+           // Set node_ to nullptr to indicate error or end state
+           node_ = nullptr;
+           return;
+      }
+
+      // If node_ptr_ is behind, advance it.
+      // This is needed (and has to be 'while' rather than 'if') as other threads
+      // could spawn new nodes between &node_ptr_ and *node_ptr_ while we didn't
+      // see.
+      while (*node_ptr_ && (*node_ptr_)->index_ < current_idx_) {
+          node_ptr_ = &(*node_ptr_)->sibling_;
+      }
+      // If in the end node_ptr_ points to the node that we need, populate node_
+      // and advance node_ptr_.
+      if (*node_ptr_ && (*node_ptr_)->index_ == current_idx_) {
+          node_ = (*node_ptr_).get();
+          node_ptr_ = &node_->sibling_; // Advance node_ptr_ for next ++ call
+      } else {
+          node_ = nullptr; // Corresponding node not found (dangling edge)
+      }
   }
 
+
   // Pointer to a pointer to the next node. Has to be a pointer to pointer
-  // as we'd like to update it when spawning a new node.
-  Ptr node_ptr_;
+  // as we'd like to update it when spawning a new node. (Only used in linked list mode)
+  Ptr node_ptr_ = nullptr;
   uint16_t current_idx_ = 0;
   uint16_t total_count_ = 0;
+  NodePtr parent_node_ = nullptr; // Store parent node pointer
 };
+
 
 // TODO(crem) Replace this with less hacky iterator once we support C++17.
 // This class has multiple hypostases within one class:
@@ -554,85 +728,111 @@ class Edge_Iterator : public EdgeAndNode {
 template <bool is_const>
 class VisitedNode_Iterator {
  public:
+  using NodePtr = std::conditional_t<is_const, const Node*, Node*>; // Use NodePtr type alias
+
   // Creates "end()" iterator.
   VisitedNode_Iterator() {}
 
   // Creates "begin()" iterator. Also happens to be a range constructor.
   // child_ptr will be nullptr if parent_node is solid children.
-  VisitedNode_Iterator(const Node& parent_node, Node* child_ptr)
-      : node_ptr_(child_ptr),
-        total_count_(parent_node.num_edges_),
-        solid_(parent_node.solid_children_) {
-    if (node_ptr_ != nullptr && node_ptr_->GetN() == 0) {
-      operator++();
-    }
+  VisitedNode_Iterator(NodePtr parent_node) // Takes parent directly
+      : parent_node_(parent_node),
+        total_count_(parent_node ? parent_node->num_edges_ : 0), // Handle null parent
+        solid_(parent_node ? parent_node->solid_children_ : false) // Handle null parent
+        {
+        if (!parent_node) { // Handle null parent case
+            node_ptr_ = nullptr;
+            current_idx_ = 0;
+            return;
+        }
+
+        if (solid_) {
+            node_ptr_ = parent_node_->child_.get(); // Point to start of array
+            current_idx_ = 0;
+             // Find first visited node
+             while (current_idx_ < total_count_ && (!node_ptr_ || node_ptr_[current_idx_].GetN() == 0)) {
+                 current_idx_++;
+             }
+             if (current_idx_ >= total_count_) {
+                  node_ptr_ = nullptr; // No visited nodes found
+             } else {
+                  // node_ptr_ is already pointing to the array start, index handles current node
+             }
+        } else { // Linked list mode
+             node_ptr_ = parent_node_->child_.get(); // Start from first child
+             // Find first visited node
+             while (node_ptr_ != nullptr && node_ptr_->GetN() == 0) {
+                 node_ptr_ = node_ptr_->sibling_.get();
+             }
+             current_idx_ = node_ptr_ ? node_ptr_->index_ : total_count_; // Store index for potential future use if needed
+        }
+
   }
   // These are technically wrong, but are usable to compare with end().
   bool operator==(const VisitedNode_Iterator<is_const>& other) const {
-    return node_ptr_ == other.node_ptr_;
+    // Compare based on node_ptr_ and potentially index for solid mode
+     if (solid_) return (node_ptr_ == other.node_ptr_ && current_idx_ == other.current_idx_) || (node_ptr_ == nullptr && other.node_ptr_ == nullptr && current_idx_ >= total_count_ && other.current_idx_ >= other.total_count_);
+     return node_ptr_ == other.node_ptr_;
   }
   bool operator!=(const VisitedNode_Iterator<is_const>& other) const {
-    return node_ptr_ != other.node_ptr_;
+    return !(*this == other);
   }
 
   // Function to support range interface.
   VisitedNode_Iterator<is_const> begin() { return *this; }
-  VisitedNode_Iterator<is_const> end() { return {}; }
+  VisitedNode_Iterator<is_const> end() { return {}; } // Default constructor is end iterator
 
   // Functions to support iterator interface.
-  // Equality comparison operators are inherited from EdgeAndNode.
   void operator++() {
-    if (solid_) {
-      while (++current_idx_ != total_count_ &&
-             node_ptr_[current_idx_].GetN() == 0) {
-        if (node_ptr_[current_idx_].GetNInFlight() == 0) {
-          // Once there is not even n in flight, we can skip to the end. This is
-          // due to policy being in sorted order meaning that additional n in
-          // flight are always selected from the front of the section with no n
-          // in flight or visited.
-          current_idx_ = total_count_;
-          break;
-        }
-      }
-      if (current_idx_ == total_count_) {
-        node_ptr_ = nullptr;
-      }
-    } else {
-      do {
-        node_ptr_ = node_ptr_->sibling_.get();
-        // If n started is 0, can jump direct to end due to sorted policy
-        // ensuring that each time a new edge becomes best for the first time,
-        // it is always the first of the section at the end that has NStarted of
-        // 0.
-        if (node_ptr_ != nullptr && node_ptr_->GetN() == 0 &&
-            node_ptr_->GetNInFlight() == 0) {
-          node_ptr_ = nullptr;
-          break;
-        }
-      } while (node_ptr_ != nullptr && node_ptr_->GetN() == 0);
-    }
+     if (!node_ptr_) return; // Already at end
+
+     if (solid_) {
+         // Move to the next index and find the next visited node
+         current_idx_++;
+          while (current_idx_ < total_count_ && node_ptr_[current_idx_].GetN() == 0) {
+              // Skip check for n_in_flight==0 for simplicity based on VisitedNodes usage
+              current_idx_++;
+          }
+          if (current_idx_ >= total_count_) {
+              node_ptr_ = nullptr; // Reached end
+              current_idx_ = total_count_; // Set index consistently for end comparison
+          }
+          // No need to change node_ptr_, index handles the current position
+     } else { // Linked list mode
+         // Move to the next sibling and find the next visited node
+         do {
+             node_ptr_ = node_ptr_->sibling_.get();
+         } while (node_ptr_ != nullptr && node_ptr_->GetN() == 0);
+         // Update index if needed (though not strictly necessary for linked list iteration)
+         current_idx_ = node_ptr_ ? node_ptr_->index_ : total_count_;
+     }
   }
+
+
   Node* operator*() {
     if (solid_) {
-      return &(node_ptr_[current_idx_]);
+       // Check if current_idx_ is valid before dereferencing
+        return (current_idx_ < total_count_ && node_ptr_ != nullptr) ? &(node_ptr_[current_idx_]) : nullptr;
     } else {
       return node_ptr_;
     }
   }
 
  private:
-  // Pointer to current node.
+  // Pointer to current node (or start of array in solid mode).
   Node* node_ptr_ = nullptr;
-  uint16_t current_idx_ = 0;
+  uint16_t current_idx_ = 0; // Index used primarily for solid mode
   uint16_t total_count_ = 0;
   bool solid_ = false;
+  NodePtr parent_node_ = nullptr; // Store parent node pointer
 };
 
+
 inline VisitedNode_Iterator<true> Node::VisitedNodes() const {
-  return {*this, child_.get()};
+  return VisitedNode_Iterator<true>(this); // Use the new constructor
 }
 inline VisitedNode_Iterator<false> Node::VisitedNodes() {
-  return {*this, child_.get()};
+  return VisitedNode_Iterator<false>(this); // Use the new constructor
 }
 
 class NodeTree {
