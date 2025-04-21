@@ -5,6 +5,7 @@ image:
 - Visual Studio 2019
 environment:
   matrix:
+  - NAME: onednn
   - NAME: gpu-nvidia-cudnn
   - NAME: gpu-nvidia-cuda
 #  - NAME: gpu-dx12
