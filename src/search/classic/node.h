@@ -6,291 +6,309 @@
 
 #pragma once
 
-#include <array>
-#include <condition_variable>
-#include <functional>
+#include <algorithm>
+#include <atomic>
+#include <cmath>
+#include <iostream>
 #include <limits>
-#include <optional>
-#include <shared_mutex>
-#include <thread>
+#include <memory>
+#include <mutex>
+#include <utility>
+#include <vector>
 
-// Corrected Includes (Mixed paths)
-#include "chess/callbacks.h" // <<< Added prefix back - Assuming it's in chess/
-#include "chess/uciloop.h"   // <<< Added prefix back - Assuming it's in chess/
-#include "chess.h"           // <<< NO prefix - Core type definitions
-#include "position.h"       // <<< NO prefix - Position/hash definitions
-#include "gamestate.h"       // <<< NO prefix - For PositionHistory
-#include "neural/backend.h"
-#include "search/classic/node.h" // Includes node.h (which itself includes core files without prefix)
-#include "search/classic/params.h"
-#include "search/classic/stoppers/timemgr.h"
-#include "syzygy/syzygy.h" // Path may vary
-#include "utils/logging.h"
+// Corrected Includes (Using chess/ prefix consistently)
+#include "chess/board.h"     // <<< Added prefix
+#include "chess/callbacks.h" // <<< Added prefix
+#include "chess/chess.h"     // <<< Added prefix
+#include "chess/gamestate.h" // <<< Added prefix
+#include "chess/position.h" // <<< Added prefix
+#include "neural/encoder.h"
+#include "proto/net.pb.h"
 #include "utils/mutex.h"
-
 
 namespace lczero {
 namespace classic {
 
-// Define constants for known win/loss based on LC0's Mate value
-constexpr Value kValueKnownWin = kValueMate;
-constexpr Value kValueKnownLoss = -kValueMate;
+// Forward declarations
+class SearchParams;
+class Node;
+class EdgeAndNode;
+template <bool is_const> class Edge_Iterator;
+template <bool is_const> class VisitedNode_Iterator;
 
-// TTEntry structure placeholder (assuming it's defined elsewhere or implicitly)
-// Example:
-// struct TTEntry {
-//     // ... existing fields like policy_data, value, visits, age, etc. ...
-//     bool known_win = false;
-//     bool known_loss = false;
-// };
-
-
-class Search {
+class Edge {
  public:
-  Search(const NodeTree& tree, Backend* network,
-         std::unique_ptr<UciResponder> uci_responder,
-         const MoveList& searchmoves,
-         std::chrono::steady_clock::time_point start_time,
-         std::unique_ptr<SearchStopper> stopper, bool infinite, bool ponder,
-         const OptionsDict& options, SyzygyTablebase* syzygy_tb);
-
-  ~Search();
-
-  void StartThreads(size_t how_many);
-  void RunBlocking(size_t threads);
-  void Stop();
-  void Abort();
-  void Wait();
-  bool IsSearchActive() const;
-
-  std::pair<Move, Move> GetBestMove();
-  Eval GetBestEval(Move* move = nullptr, bool* is_terminal = nullptr) const;
-  std::int64_t GetTotalPlayouts() const;
-  const SearchParams& GetParams() const { return params_; }
-  void ResetBestMove();
-  std::optional<EvalResult> GetCachedNNEval(const Node* node) const;
+  static std::unique_ptr<Edge[]> FromMovelist(const MoveList& moves);
+  Move GetMove(bool as_opponent = false) const;
+  float GetP() const;
+  void SetP(float val);
+  std::string DebugString() const;
 
  private:
-  void EnsureBestMoveKnown();
-  EdgeAndNode GetBestChildNoTemperature(Node* parent, int depth) const;
-  std::vector<EdgeAndNode> GetBestChildrenNoTemperature(Node* parent, int count,
-                                                        int depth) const;
-  EdgeAndNode GetBestRootChildWithTemperature(float temperature) const;
+  Move move_;
+  uint16_t p_ = 0;
+  friend class Node;
+  friend class Edge_Iterator<true>;
+  friend class Edge_Iterator<false>;
+};
 
-  int64_t GetTimeSinceStart() const;
-  int64_t GetTimeSinceFirstBatch() const;
-  void MaybeTriggerStop(const IterationStats& stats, StoppersHints* hints);
-  void MaybeOutputInfo();
-  void SendUciInfo();
-  void FireStopInternal();
-  void SendMovesStats() const;
-  void WatchdogThread();
-  void PopulateCommonIterationStats(IterationStats* stats);
-  std::vector<std::string> GetVerboseStats(Node* node) const;
-  float GetDrawScore(bool is_odd_depth) const;
-  void CancelSharedCollisions();
-  PositionHistory GetPositionHistoryAtNode(const Node* node) const;
+class Node {
+ public:
+  using Iterator = Edge_Iterator<false>;
+  using ConstIterator = Edge_Iterator<true>;
 
-  // NOTE: Placeholder for StoreTT declaration
-  void StoreTT(PositionHash hash, Node* node); // PositionHash should now be defined
+  enum class Terminal : uint8_t { NonTerminal, EndOfGame, Tablebase, TwoFold };
 
+  Node(Node* parent, uint16_t index); // Constructor declaration
 
-  mutable Mutex counters_mutex_ ACQUIRED_AFTER(nodes_mutex_);
-  std::atomic<bool> stop_{false};
-  std::condition_variable watchdog_cv_;
-  bool ok_to_respond_bestmove_ GUARDED_BY(counters_mutex_) = true;
-  bool bestmove_is_sent_ GUARDED_BY(counters_mutex_) = false;
-  Move final_bestmove_ GUARDED_BY(counters_mutex_);
-  Move final_pondermove_ GUARDED_BY(counters_mutex_);
-  std::unique_ptr<SearchStopper> stopper_ GUARDED_BY(counters_mutex_);
+  Node(Node&& move_from) = default;
+  Node& operator=(Node&& move_from) = default;
+  Node(const Node&) = delete;
+  Node& operator=(const Node&) = delete;
 
-  Mutex threads_mutex_;
-  std::vector<std::thread> threads_ GUARDED_BY(threads_mutex_);
+  Node* CreateSingleChildNode(Move m);
+  void CreateEdges(const MoveList& moves);
+  Node* GetParent() const { return parent_; }
+  bool HasChildren() const { return static_cast<bool>(edges_); }
+  float GetVisitedPolicy() const;
 
-  Node* root_node_;
-  SyzygyTablebase* syzygy_tb_;
-  const PositionHistory& played_history_;
+  // Visit count accessors
+  uint32_t GetN() const { return n_.load(std::memory_order_relaxed); }
+  uint32_t GetNInFlight() const { return n_in_flight_.load(std::memory_order_relaxed); }
+  uint32_t GetVisitCount() const { return GetN(); }
+  int GetNStarted() const { return n_.load(std::memory_order_relaxed) + n_in_flight_.load(std::memory_order_relaxed); }
+  uint32_t GetChildrenVisits() const {
+      uint32_t n = GetN();
+      return n > 0 ? n - 1 : 0;
+  }
+  int GetEffectiveVisits() const { return GetNStarted(); }
+  int GetEffectiveParentVisits() const; // Implemented in .cc
 
-  Backend* const backend_;
-  BackendAttributes backend_attributes_;
-  const SearchParams params_;
-  const MoveList searchmoves_;
-  const std::chrono::steady_clock::time_point start_time_;
-  int64_t initial_visits_;
-  bool root_is_in_dtz_ = false;
-  std::atomic<int> tb_hits_{0};
-  const MoveList root_move_filter_;
+  // Value accessors
+  float GetQ(float draw_score) const;
+  Value GetValue() const; // Returns Value (double)
+  float GetWL() const { return static_cast<float>(wl_.load(std::memory_order_relaxed)); }
+  float GetD() const { return d_.load(std::memory_order_relaxed); }
+  float GetM() const { return m_.load(std::memory_order_relaxed); }
+  float GetPolicyPrior() const;
 
-  mutable SharedMutex nodes_mutex_;
-  EdgeAndNode current_best_edge_ GUARDED_BY(nodes_mutex_);
-  Edge* last_outputted_info_edge_ GUARDED_BY(nodes_mutex_) = nullptr;
-  ThinkingInfo last_outputted_uci_info_ GUARDED_BY(nodes_mutex_);
-  int64_t total_playouts_ GUARDED_BY(nodes_mutex_) = 0;
-  int64_t total_batches_ GUARDED_BY(nodes_mutex_) = 0;
-  uint16_t max_depth_ GUARDED_BY(nodes_mutex_) = 0;
-  uint64_t cum_depth_ GUARDED_BY(nodes_mutex_) = 0;
+  // State checks and setters
+  bool IsTerminal() const { return terminal_type_ != Terminal::NonTerminal; }
+  bool IsTbTerminal() const { return terminal_type_ == Terminal::Tablebase; }
+  bool IsTwoFoldTerminal() const { return terminal_type_ == Terminal::TwoFold; }
+  typedef std::pair<GameResult, GameResult> Bounds;
+  Bounds GetBounds() const { return {lower_bound_, upper_bound_}; }
+  void SetBounds(GameResult lower, GameResult upper);
+  void MakeTerminal(GameResult result, float plies_left = 0.0f,
+                    Terminal type = Terminal::EndOfGame);
+  void MakeNotTerminal();
 
-  std::optional<std::chrono::steady_clock::time_point> nps_start_time_
-      GUARDED_BY(counters_mutex_);
+  // Edge/Child info
+  uint8_t GetNumEdges() const { return num_edges_; }
+  void CopyPolicy(int max_needed, float* output) const;
 
-  std::atomic<int> pending_searchers_{0};
-  std::atomic<int> backend_waiting_counter_{0};
-  std::atomic<int> thread_count_{0};
+  // Backup/Update methods
+  bool TryStartScoreUpdate();
+  void CancelScoreUpdate(int multivisit);
+  void FinalizeScoreUpdate(Value v, float d, float m, int multivisit);
+  void AdjustForTerminal(Value v_delta, float d_delta, float m_delta, int multivisit);
+  void RevertTerminalVisits(Value v, float d, float m, int multivisit);
+  void IncrementNInFlight(int multivisit) { n_in_flight_.fetch_add(multivisit, std::memory_order_relaxed); }
 
-  std::vector<std::pair<Node*, int>> shared_collisions_
-      GUARDED_BY(nodes_mutex_);
+  // Iterators
+  ConstIterator Edges() const;
+  Iterator Edges();
+  VisitedNode_Iterator<true> VisitedNodes() const;
+  VisitedNode_Iterator<false> VisitedNodes();
 
-  std::unique_ptr<UciResponder> uci_responder_;
-  ContemptMode contempt_mode_;
+  // Tree management
+  void ReleaseChildren();
+  void ReleaseChildrenExceptOne(Node* node_to_save);
+  Edge* GetEdgeToNode(const Node* node) const;
+  Edge* GetOwnEdge() const;
+  std::string DebugString() const;
+  bool MakeSolid();
+  void SortEdges();
+
+  // Node identity
+  uint16_t Index() const { return index_; }
+
+   // --- NEW MEMBERS for Proven State ---
+   std::atomic<bool> is_known_win{false};
+   std::atomic<bool> is_known_loss{false};
+
+   // --- NEW METHODS for Proven State ---
+   Value GetMinValue() const; // Returns Value (double)
+   Value GetMaxValue() const; // Returns Value (double)
+
+   // --- Helper Methods ---
+   const std::unique_ptr<Node>* GetChildrenPtr() const { return &child_; }
+   Node* GetChild(int index) const;
+   int GetNumChildren() const { return num_edges_; }
+
+  ~Node(); // Destructor declaration
+
+ private:
+  void UpdateChildrenParents();
+
+  // Member variable order (largest to smallest, atomics grouped)
+  std::unique_ptr<Edge[]> edges_;
+  Node* parent_ = nullptr;
+  std::unique_ptr<Node> child_;
+  std::unique_ptr<Node> sibling_;
+  std::atomic<double> wl_{0.0};
+
+  std::atomic<float> d_{0.0};
+  std::atomic<float> m_{0.0};
+  std::atomic<uint32_t> n_{0};
+  std::atomic<uint32_t> n_in_flight_{0};
+
+  uint16_t index_;
+
+  uint8_t num_edges_ = 0;
+  Terminal terminal_type_ : 2;
+  GameResult lower_bound_ : 2;
+  GameResult upper_bound_ : 2;
+  bool solid_children_ : 1;
+
+  // Friend declarations
+  friend class NodeTree;
+  friend class Edge_Iterator<true>;
+  friend class Edge_Iterator<false>;
+  friend class VisitedNode_Iterator<true>;
+  friend class VisitedNode_Iterator<false>;
   friend class SearchWorker;
 };
 
-// --- SearchWorker class ---
-class SearchWorker {
+// --- EdgeAndNode ---
+class EdgeAndNode {
  public:
-  SearchWorker(Search* search, const SearchParams& params); // Constructor Declaration
-  ~SearchWorker(); // Destructor Declaration
+  EdgeAndNode() = default;
+  EdgeAndNode(Edge* edge, Node* node) : edge_(edge), node_(node) {}
+  void Reset() { edge_ = nullptr; node_ = nullptr; }
+  explicit operator bool() const { return edge_ != nullptr; }
+   bool operator==(const EdgeAndNode& other) const {
+       return edge_ == other.edge_ && node_ == other.node_;
+   }
+   bool operator!=(const EdgeAndNode& other) const { return !(*this == other); }
+   bool HasNode() const { return node_ != nullptr; }
+   Edge* edge() const { return edge_; }
+   Node* node() const { return node_; }
 
-  void RunBlocking();
-  void ExecuteOneIteration();
-  void InitializeIteration(std::unique_ptr<BackendComputation> computation);
-  void GatherMinibatch();
-  void CollectCollisions();
-  void MaybePrefetchIntoCache();
-  void RunNNComputation();
-  void FetchMinibatchResults();
-  void DoBackupUpdate();
-  void UpdateCounters();
+   float GetQ(float default_q, float draw_score) const;
+   float GetWL(float default_wl) const;
+   float GetD(float default_d) const;
+   float GetM(float default_m) const;
+   uint32_t GetN() const { return node_ ? node_->GetN() : 0; }
+   int GetNStarted() const { return node_ ? node_->GetNStarted() : 0; }
+   uint32_t GetNInFlight() const { return node_ ? node_->GetNInFlight() : 0; }
+   bool IsTerminal() const { return node_ ? node_->IsTerminal() : false; }
+   bool IsTbTerminal() const { return node_ ? node_->IsTbTerminal() : false; }
+   Node::Bounds GetBounds() const;
+   float GetP() const { return edge_ ? edge_->GetP() : 0.0f; }
+   Move GetMove(bool flip = false) const;
+   float GetU(float numerator) const;
+   std::string DebugString() const;
 
- private:
-  struct NodeToProcess; // Forward declare inner struct
-  struct TaskWorkspace; // Forward declare inner struct
-  struct PickTask;      // Forward declare inner struct
-
-  // NodeToProcess Definition
-  struct NodeToProcess {
-    bool IsExtendable() const { return node && !is_collision && !node->IsTerminal(); } // Add null check
-    bool IsCollision() const { return is_collision; }
-    bool CanEvalOutOfOrder() const {
-      return node && (is_cache_hit || node->IsTerminal()); // Add null check
-    }
-
-    Node* node;
-    std::unique_ptr<EvalResult> eval; // Use EvalResult from proto
-    int multivisit = 0;
-    int maxvisit = 0;
-    uint16_t depth;
-    bool nn_queried = false;
-    bool is_cache_hit = false;
-    bool is_collision = false;
-    std::vector<Move> moves_to_visit;
-    bool ooo_completed = false;
-
-    static NodeToProcess Collision(Node* node, uint16_t depth,
-                                   int collision_count) {
-      return NodeToProcess(node, depth, true, collision_count, 0);
-    }
-    static NodeToProcess Collision(Node* node, uint16_t depth,
-                                   int collision_count, int max_count) {
-      return NodeToProcess(node, depth, true, collision_count, max_count);
-    }
-    static NodeToProcess Visit(Node* node, uint16_t depth) {
-      return NodeToProcess(node, depth, false, 1, 0);
-    }
-
-   private:
-    NodeToProcess(Node* node, uint16_t depth, bool is_collision, int multivisit,
-                  int max_count)
-        : node(node),
-          eval(std::make_unique<EvalResult>()), // Use EvalResult
-          multivisit(multivisit),
-          maxvisit(max_count),
-          depth(depth),
-          is_collision(is_collision) {}
-  };
-
-  // TaskWorkspace Definition
-  struct TaskWorkspace {
-    std::array<Node::Iterator, 256> cur_iters;
-    std::vector<std::unique_ptr<std::array<int, 256>>> vtp_buffer;
-    std::vector<std::unique_ptr<std::array<int, 256>>> visits_to_perform;
-    std::vector<int> vtp_last_filled;
-    std::vector<int> current_path;
-    std::vector<Move> moves_to_path;
-    PositionHistory history;
-    TaskWorkspace(); // Default constructor declaration
-  };
-
-   // PickTask Definition
-  struct PickTask {
-    enum PickTaskType { kGathering, kProcessing };
-    PickTaskType task_type;
-
-    Node* start;
-    int base_depth;
-    int collision_limit;
-    std::vector<Move> moves_to_base;
-    std::vector<NodeToProcess> results;
-
-    int start_idx;
-    int end_idx;
-
-    bool complete = false;
-
-    PickTask(Node* node, uint16_t depth, const std::vector<Move>& base_moves,
-             int collision_limit); // Constructor declaration
-    PickTask(int start_idx, int end_idx); // Constructor declaration
-  };
-
-
-  bool AddNodeToComputation(Node* node);
-  int PrefetchIntoCache(Node* node, int budget, bool is_odd_depth);
-  void DoBackupUpdateSingleNode(const NodeToProcess& node_to_process);
-  bool MaybeSetBounds(Node* p, float m, int* n_to_fix, Value* v_delta, // Use Value*
-                      float* d_delta, float* m_delta);
-  void PickNodesToExtend(int collision_limit);
-  void PickNodesToExtendTask(Node* starting_point, int base_depth, // Corrected order
-                             int collision_limit,
-                             const std::vector<Move>& moves_to_base,
-                             std::vector<NodeToProcess>* receiver,
-                             TaskWorkspace* workspace);
-  void EnsureNodeTwoFoldCorrectForDepth(Node* node, int depth);
-  void ProcessPickedTask(int batch_start, int batch_end,
-                         TaskWorkspace* workspace);
-  void ExtendNode(Node* node, int depth, const std::vector<Move>& moves_to_add,
-                  PositionHistory* history);
-  void FetchSingleNodeResult(NodeToProcess* node_to_process);
-  void RunTasks(int tid);
-  void ResetTasks();
-  int WaitForTasks();
-
-  Search* const search_;
-  std::vector<NodeToProcess> minibatch_;
-  std::unique_ptr<BackendComputation> computation_;
-  int task_workers_;
-  int target_minibatch_size_;
-  int max_out_of_order_;
-  PositionHistory history_;
-  int number_out_of_order_ = 0;
-  const SearchParams& params_;
-  std::unique_ptr<Node> precached_node_;
-  const bool moves_left_support_;
-  IterationStats iteration_stats_;
-  StoppersHints latest_time_manager_hints_;
-
-  Mutex picking_tasks_mutex_;
-  std::vector<PickTask> picking_tasks_;
-  std::atomic<int> task_count_ = -1;
-  std::atomic<int> task_taking_started_ = 0;
-  std::atomic<int> tasks_taken_ = 0;
-  std::atomic<int> completed_tasks_ = 0;
-  std::condition_variable task_added_;
-  std::vector<std::thread> task_threads_;
-  std::vector<TaskWorkspace> task_workspaces_;
-  TaskWorkspace main_workspace_;
-  bool exiting_ = false;
+ protected:
+   Edge* edge_ = nullptr;
+   Node* node_ = nullptr;
 };
 
+// --- Edge_Iterator ---
+template <bool is_const>
+class Edge_Iterator : public EdgeAndNode {
+ public:
+  using Ptr = std::conditional_t<is_const, const std::unique_ptr<Node>*,
+                                 std::unique_ptr<Node>*>;
+  using NodePtr = std::conditional_t<is_const, const Node*, Node*>;
+  using value_type = Edge_Iterator;
+  using iterator_category = std::forward_iterator_tag;
+  using difference_type = std::ptrdiff_t;
+  using pointer = Edge_Iterator*;
+  using reference = Edge_Iterator&;
+
+  Edge_Iterator();
+  Edge_Iterator(NodePtr parent_node);
+
+  Edge_Iterator<is_const> begin();
+  Edge_Iterator<is_const> end();
+  void operator++();
+  Edge_Iterator& operator*();
+  Node* GetOrSpawnNode(Node* parent);
+
+ private:
+  void Actualize();
+
+  NodePtr parent_node_ = nullptr;
+  Ptr node_ptr_ = nullptr;
+  uint16_t current_idx_ = 0;
+  uint16_t total_count_ = 0;
+};
+
+// --- VisitedNode_Iterator ---
+template <bool is_const>
+class VisitedNode_Iterator {
+ public:
+  using NodePtr = std::conditional_t<is_const, const Node*, Node*>;
+
+  VisitedNode_Iterator();
+  VisitedNode_Iterator(NodePtr parent_node);
+
+  bool operator==(const VisitedNode_Iterator<is_const>& other) const;
+  bool operator!=(const VisitedNode_Iterator<is_const>& other) const { return !(*this == other); }
+  VisitedNode_Iterator<is_const> begin();
+  VisitedNode_Iterator<is_const> end();
+  void operator++();
+  Node* operator*();
+
+ private:
+   NodePtr parent_node_ = nullptr;
+   bool solid_ = false;
+   uint16_t total_count_ = 0;
+   Node* node_ptr_ = nullptr;
+   uint16_t current_idx_ = 0;
+};
+
+// Inline definitions for begin()/end() and simple accessors
+inline Node::ConstIterator Node::Edges() const { return ConstIterator(this); }
+inline Node::Iterator Node::Edges() { return Iterator(this); }
+inline VisitedNode_Iterator<true> Node::VisitedNodes() const { return VisitedNode_Iterator<true>(this); }
+inline VisitedNode_Iterator<false> Node::VisitedNodes() { return VisitedNode_Iterator<false>(this); }
+
+template <bool is_const> inline Edge_Iterator<is_const> Edge_Iterator<is_const>::begin() { return *this; }
+template <bool is_const> inline Edge_Iterator<is_const> Edge_Iterator<is_const>::end() { return {}; }
+template <bool is_const> inline Edge_Iterator<is_const>& Edge_Iterator<is_const>::operator*() { return *this; }
+
+template <bool is_const> inline VisitedNode_Iterator<is_const> VisitedNode_Iterator<is_const>::begin() { return *this; }
+template <bool is_const> inline VisitedNode_Iterator<is_const> VisitedNode_Iterator<is_const>::end() { return {}; }
+template <bool is_const> inline Node* VisitedNode_Iterator<is_const>::operator*() {
+    if (solid_) { return (node_ptr_ != nullptr && current_idx_ < total_count_) ? &(node_ptr_[current_idx_]) : nullptr; }
+    else { return node_ptr_; }
+}
+
+// --- NodeTree ---
+class NodeTree {
+ public:
+  ~NodeTree();
+  void MakeMove(Move move);
+  void TrimTreeAtHead();
+  bool ResetToPosition(const std::string& starting_fen,
+                       const std::vector<std::string>& moves);
+  bool ResetToPosition(const GameState& pos);
+  const Position& HeadPosition() const;
+  int GetPlyCount() const;
+  bool IsBlackToMove() const;
+  Node* GetCurrentHead() const;
+  Node* GetGameBeginNode() const;
+  const PositionHistory& GetPositionHistory() const;
+
+ private:
+  void DeallocateTree();
+  Node* current_head_ = nullptr;
+  std::unique_ptr<Node> gamebegin_node_;
+  PositionHistory history_;
+};
 
 }  // namespace classic
 }  // namespace lczero
