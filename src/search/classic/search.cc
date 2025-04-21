@@ -34,6 +34,7 @@
 #include <iomanip>
 #include <iostream>
 #include <iterator>
+#include <memory>
 #include <sstream>
 #include <thread>
 #include <numeric> // Added for std::iota
@@ -255,7 +256,7 @@ void Search::UpdateRootBeam(Node* root_node) REQUIRES(nodes_mutex_) {
     // Store the indices of the top k children
     root_beam_indices_.clear();
     root_beam_indices_.reserve(k);
-    for (int i = 0; i < k && i < child_visits.size(); ++i) {
+    for (int i = 0; i < k && i < (int)child_visits.size(); ++i) { // Fixed warning: sign-compare
         root_beam_indices_.push_back(child_visits[i].second);
     }
     root_beam_active_ = true; // Activate the beam
@@ -1723,7 +1724,7 @@ void SearchWorker::PickNodesToExtendTask(
   Node::Iterator best_edge;
   Node::Iterator second_best_edge;
   // Fetch the current best root node visits for possible smart pruning.
-  const int64_t best_node_n = search_->current_best_edge_.GetN();
+  // const int64_t best_node_n = search_->current_best_edge_.GetN(); // Removed unused variable
 
   int passed_off = 0;
   int completed_visits = 0;
@@ -2099,12 +2100,12 @@ void SearchWorker::PickNodesToExtendTask(
 }
 
 void SearchWorker::ExtendNode(Node* node, int depth,
-                              const std::vector<Move>& moves_to_add,
+                              const std::vector<Move>& moves_to_node,
                               PositionHistory* history) {
   // Initialize position sequence with pre-move position.
   history->Trim(search_->played_history_.GetLength());
-  for (size_t i = 0; i < moves_to_add.size(); i++) {
-    history->Append(moves_to_add[i]);
+  for (size_t i = 0; i < moves_to_node.size(); i++) {
+    history->Append(moves_to_node[i]);
   }
 
   // We don't need the mutex because other threads will see that N=0 and
@@ -2579,3 +2580,4 @@ void SearchWorker::UpdateCounters() {
 
 }  // namespace classic
 }  // namespace lczero
+// --- END OF FILE mcts/search.cc ---
