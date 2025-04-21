@@ -14,14 +14,14 @@
 #include <shared_mutex>
 #include <thread>
 
-// Corrected Includes (Mixed paths - trying chess/ prefix for callbacks/uciloop again)
-#include "chess/callbacks.h" // <<< Added prefix back
-#include "chess/uciloop.h"   // <<< Added prefix back
-#include "chess.h"           // <<< NO prefix - Core type definitions
-#include "position.h"       // <<< NO prefix - Position/hash definitions
-#include "gamestate.h"       // <<< NO prefix - For PositionHistory
+// Corrected Includes (Using chess/ prefix consistently)
+#include "chess/callbacks.h" // <<< Added prefix
+#include "chess/chess.h"     // <<< Added prefix
+#include "chess/position.h" // <<< Added prefix
+#include "chess/uciloop.h"   // <<< Added prefix
+#include "chess/gamestate.h" // <<< Added prefix (for PositionHistory)
 #include "neural/backend.h"
-#include "search/classic/node.h" // Includes node.h (which itself includes core files without prefix)
+#include "search/classic/node.h" // Includes node.h (which itself includes chess/* files)
 #include "search/classic/params.h"
 #include "search/classic/stoppers/timemgr.h"
 #include "syzygy/syzygy.h" // Path may vary
@@ -145,7 +145,7 @@ class Search {
   friend class SearchWorker;
 };
 
-// --- SearchWorker class --- (No changes needed inside the class declaration itself)
+// --- SearchWorker class ---
 class SearchWorker {
  public:
   SearchWorker(Search* search, const SearchParams& params);
