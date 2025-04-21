@@ -16,12 +16,12 @@
 #include <utility>
 #include <vector>
 
-// Corrected Includes (Using chess/ prefix and necessary headers)
-#include "chess/board.h"     // For MoveList
-#include "chess/callbacks.h" // For ThinkingInfo etc.
-#include "chess/types.h"     // <<< Defines Value, GameResult, kValueMate, Move, Eval etc.
-#include "chess/gamestate.h" // For PositionHistory
-#include "chess/position.h" // For PositionHash
+// Corrected Includes (Using chess/ prefix and types.h)
+#include "chess/board.h"
+#include "chess/callbacks.h" // Defines IterationStats, StoppersHints?
+#include "chess/types.h"     // <<< Defines lczero::Value, lczero::GameResult, lczero::kValueMate, lczero::Move etc.
+#include "chess/gamestate.h"
+#include "chess/position.h" // <<< Defines lczero::PositionHash
 #include "neural/encoder.h"
 #include "proto/net.pb.h"   // For EvalResult
 #include "utils/mutex.h"
@@ -60,20 +60,19 @@ class Node {
 
   enum class Terminal : uint8_t { NonTerminal, EndOfGame, Tablebase, TwoFold };
 
-  Node(Node* parent, uint16_t index); // Constructor declaration
+  Node(Node* parent, uint16_t index);
 
   Node(Node&& move_from) = default;
   Node& operator=(Node&& move_from) = default;
   Node(const Node&) = delete;
   Node& operator=(const Node&) = delete;
 
-  Node* CreateSingleChildNode(lczero::Move m); // Use lczero::
-  void CreateEdges(const lczero::MoveList& moves); // Use lczero::
+  Node* CreateSingleChildNode(lczero::Move m);
+  void CreateEdges(const lczero::MoveList& moves);
   Node* GetParent() const { return parent_; }
   bool HasChildren() const { return static_cast<bool>(edges_); }
   float GetVisitedPolicy() const;
 
-  // Visit count accessors
   uint32_t GetN() const { return n_.load(std::memory_order_relaxed); }
   uint32_t GetNInFlight() const { return n_in_flight_.load(std::memory_order_relaxed); }
   uint32_t GetVisitCount() const { return GetN(); }
@@ -83,9 +82,8 @@ class Node {
       return n > 0 ? n - 1 : 0;
   }
   int GetEffectiveVisits() const { return GetNStarted(); }
-  int GetEffectiveParentVisits() const; // Implemented in .cc
+  int GetEffectiveParentVisits() const;
 
-  // Value accessors
   float GetQ(float draw_score) const;
   lczero::Value GetValue() const; // <<< Use lczero::Value
   float GetWL() const { return static_cast<float>(wl_.load(std::memory_order_relaxed)); }
@@ -93,7 +91,6 @@ class Node {
   float GetM() const { return m_.load(std::memory_order_relaxed); }
   float GetPolicyPrior() const;
 
-  // State checks and setters
   bool IsTerminal() const { return terminal_type_ != Terminal::NonTerminal; }
   bool IsTbTerminal() const { return terminal_type_ == Terminal::Tablebase; }
   bool IsTwoFoldTerminal() const { return terminal_type_ == Terminal::TwoFold; }
@@ -104,11 +101,9 @@ class Node {
                     Terminal type = Terminal::EndOfGame);
   void MakeNotTerminal();
 
-  // Edge/Child info
   uint8_t GetNumEdges() const { return num_edges_; }
   void CopyPolicy(int max_needed, float* output) const;
 
-  // Backup/Update methods
   bool TryStartScoreUpdate();
   void CancelScoreUpdate(int multivisit);
   void FinalizeScoreUpdate(lczero::Value v, float d, float m, int multivisit); // <<< Use lczero::Value
@@ -116,13 +111,11 @@ class Node {
   void RevertTerminalVisits(lczero::Value v, float d, float m, int multivisit); // <<< Use lczero::Value
   void IncrementNInFlight(int multivisit) { n_in_flight_.fetch_add(multivisit, std::memory_order_relaxed); }
 
-  // Iterators
   ConstIterator Edges() const;
   Iterator Edges();
   VisitedNode_Iterator<true> VisitedNodes() const;
   VisitedNode_Iterator<false> VisitedNodes();
 
-  // Tree management
   void ReleaseChildren();
   void ReleaseChildrenExceptOne(Node* node_to_save);
   Edge* GetEdgeToNode(const Node* node) const;
@@ -131,7 +124,6 @@ class Node {
   bool MakeSolid();
   void SortEdges();
 
-  // Node identity
   uint16_t Index() const { return index_; }
 
    // --- NEW MEMBERS for Proven State ---
@@ -147,12 +139,11 @@ class Node {
    Node* GetChild(int index) const;
    int GetNumChildren() const { return num_edges_; }
 
-  ~Node(); // Destructor declaration
+  ~Node();
 
  private:
   void UpdateChildrenParents();
 
-  // Member variables
   std::unique_ptr<Edge[]> edges_;
   Node* parent_ = nullptr;
   std::unique_ptr<Node> child_;
@@ -172,7 +163,6 @@ class Node {
   lczero::GameResult upper_bound_ : 2; // <<< Use lczero::GameResult
   bool solid_children_ : 1;
 
-  // Friend declarations
   friend class NodeTree;
   friend class Edge_Iterator<true>;
   friend class Edge_Iterator<false>;
@@ -205,9 +195,9 @@ class EdgeAndNode {
    uint32_t GetNInFlight() const { return node_ ? node_->GetNInFlight() : 0; }
    bool IsTerminal() const { return node_ ? node_->IsTerminal() : false; }
    bool IsTbTerminal() const { return node_ ? node_->IsTbTerminal() : false; }
-   Node::Bounds GetBounds() const; // <<< Return type uses qualified GameResult
+   Node::Bounds GetBounds() const;
    float GetP() const { return edge_ ? edge_->GetP() : 0.0f; }
-   lczero::Move GetMove(bool flip = false) const; // <<< Use lczero::Move
+   lczero::Move GetMove(bool flip = false) const; // <<< Use lczero::
    float GetU(float numerator) const;
    std::string DebugString() const;
 
@@ -271,7 +261,7 @@ class VisitedNode_Iterator {
    uint16_t current_idx_ = 0;
 };
 
-// Inline definitions for begin()/end() and simple accessors
+// Inline definitions
 inline Node::ConstIterator Node::Edges() const { return ConstIterator(this); }
 inline Node::Iterator Node::Edges() { return Iterator(this); }
 inline VisitedNode_Iterator<true> Node::VisitedNodes() const { return VisitedNode_Iterator<true>(this); }
@@ -292,23 +282,23 @@ template <bool is_const> inline Node* VisitedNode_Iterator<is_const>::operator*(
 class NodeTree {
  public:
   ~NodeTree();
-  void MakeMove(lczero::Move move); // <<< Use lczero::Move
+  void MakeMove(lczero::Move move); // <<< Use lczero::
   void TrimTreeAtHead();
   bool ResetToPosition(const std::string& starting_fen,
                        const std::vector<std::string>& moves);
-  bool ResetToPosition(const lczero::GameState& pos); // <<< Use lczero::GameState
-  const lczero::Position& HeadPosition() const; // <<< Use lczero::Position
+  bool ResetToPosition(const lczero::GameState& pos); // <<< Use lczero::
+  const lczero::Position& HeadPosition() const; // <<< Use lczero::
   int GetPlyCount() const;
   bool IsBlackToMove() const;
   Node* GetCurrentHead() const;
   Node* GetGameBeginNode() const;
-  const lczero::PositionHistory& GetPositionHistory() const; // <<< Use lczero::PositionHistory
+  const lczero::PositionHistory& GetPositionHistory() const; // <<< Use lczero::
 
  private:
   void DeallocateTree();
   Node* current_head_ = nullptr;
   std::unique_ptr<Node> gamebegin_node_;
-  lczero::PositionHistory history_; // <<< Use lczero::PositionHistory
+  lczero::PositionHistory history_; // <<< Use lczero::
 };
 
 }  // namespace classic
