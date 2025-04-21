@@ -679,7 +679,7 @@ SearchParams::SearchParams(const OptionsDict& options)
       kMovesLeftScaledFactor(options.Get<float>(kMovesLeftScaledFactorId)),
       kMovesLeftQuadraticFactor(
           options.Get<float>(kMovesLeftQuadraticFactorId)),
-      kDisplayCacheUsage(options.Get<bool>(kDisplayCacheUsageId)), // Kept, assuming it might be used
+      // kDisplayCacheUsage(options.Get<bool>(kDisplayCacheUsageId)), // Removed initialization
       kMaxConcurrentSearchers(options.Get<int>(kMaxConcurrentSearchersId)),
       kDrawScore(options.Get<float>(kDrawScoreId)),
       kContempt(GetContempt(options.Get<std::string>(kUCIOpponentId),
@@ -701,7 +701,7 @@ SearchParams::SearchParams(const OptionsDict& options)
       kWDLMaxS(options.Get<float>(kWDLMaxSId)), // Added init
       kWDLEvalObjectivity(options.Get<float>(kWDLEvalObjectivityId)),
       kMaxOutOfOrderEvalsFactor(options.Get<float>(kMaxOutOfOrderEvalsFactorId)), // Renamed & type changed
-      // kMaxOutOfOrderEvals calculation moved inside constructor body below
+      // kMaxOutOfOrderEvals removed from initializer list
       kNpsLimit(options.Get<float>(kNpsLimitId)),
       kSolidTreeThreshold(options.Get<int>(kSolidTreeThresholdId)), // Added init
       kTaskWorkersPerSearchWorker(
@@ -730,9 +730,11 @@ SearchParams::SearchParams(const OptionsDict& options)
       // --- END Root Beam Search ADDED ---
       // Removed initializers for features not present in the corrected params.h
        { // Start of constructor body
-           // Calculate kMaxOutOfOrderEvals here after kMiniBatchSize is initialized
-           const int effective_batch_size = (kMiniBatchSize > 0) ? kMiniBatchSize : DEFAULT_MAX_PREFETCH; // Use default if 0
-           kMaxOutOfOrderEvals = std::max(1, static_cast<int>(kMaxOutOfOrderEvalsFactor * effective_batch_size));
+           // Calculate kMaxOutOfOrderEvals here *if needed as a non-const member*
+           // Otherwise, just use kMaxOutOfOrderEvalsFactor where needed.
+           // Example if you ADDED a non-const member `max_ooo_evals_` to SearchParams:
+           // const int effective_batch_size = (kMiniBatchSize > 0) ? kMiniBatchSize : DEFAULT_MAX_PREFETCH; // Use default if minibatch is 0
+           // max_ooo_evals_ = std::max(1, static_cast<int>(kMaxOutOfOrderEvalsFactor * effective_batch_size));
        } // End of constructor body
 
 } // namespace classic
