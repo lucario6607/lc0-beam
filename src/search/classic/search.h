@@ -14,11 +14,11 @@
 #include <shared_mutex>
 #include <thread>
 
-// Corrected Includes (Using chess/ prefix where appropriate)
-#include "chess/callbacks.h" // <<< Reverted path
-#include "chess/chess.h"     // <<< Reverted path
-#include "chess/position.h" // <<< Reverted path
-#include "chess/uciloop.h"   // <<< Reverted path (Likely needed for UciResponder)
+// Corrected Includes (NO chess/ prefix)
+#include "callbacks.h" // <<< Removed prefix
+#include "chess.h"     // <<< Removed prefix - CRUCIAL
+#include "position.h" // <<< Removed prefix - CRUCIAL
+#include "uciloop.h"   // <<< Removed prefix
 #include "neural/backend.h"
 #include "search/classic/node.h" // Includes the corrected node.h
 #include "search/classic/params.h"
@@ -26,6 +26,9 @@
 #include "syzygy/syzygy.h" // Path may vary depending on Syzygy integration
 #include "utils/logging.h"
 #include "utils/mutex.h"
+// Need gamestate.h for PositionHistory used below
+#include "gamestate.h"     // <<< Removed prefix
+
 
 namespace lczero {
 namespace classic {
@@ -89,7 +92,7 @@ class Search {
   void CancelSharedCollisions();
   PositionHistory GetPositionHistoryAtNode(const Node* node) const;
 
-  // Placeholder for StoreTT declaration
+  // NOTE: Placeholder for StoreTT declaration
   void StoreTT(PositionHash hash, Node* node); // PositionHash should now be defined
 
 
