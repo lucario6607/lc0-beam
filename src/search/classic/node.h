@@ -18,7 +18,7 @@
 
 // Corrected Includes (NO prefix - Based on repo structure and build flags)
 #include "board.h"
-#include "callbacks.h"
+#include "chess/callbacks.h"
 #include "chess.h"
 #include "gamestate.h"
 #include "position.h"
