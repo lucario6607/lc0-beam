@@ -701,9 +701,7 @@ SearchParams::SearchParams(const OptionsDict& options)
       kWDLMaxS(options.Get<float>(kWDLMaxSId)), // Added init
       kWDLEvalObjectivity(options.Get<float>(kWDLEvalObjectivityId)),
       kMaxOutOfOrderEvalsFactor(options.Get<float>(kMaxOutOfOrderEvalsFactorId)), // Renamed & type changed
-      kMaxOutOfOrderEvals(std::max( // Calculation moved here
-          1, static_cast<int>(kMaxOutOfOrderEvalsFactor *
-                              (kMiniBatchSize > 0 ? kMiniBatchSize : DEFAULT_MAX_PREFETCH)))), // Use default if minibatch is 0
+      // kMaxOutOfOrderEvals calculation moved inside constructor body below
       kNpsLimit(options.Get<float>(kNpsLimitId)),
       kSolidTreeThreshold(options.Get<int>(kSolidTreeThresholdId)), // Added init
       kTaskWorkersPerSearchWorker(
@@ -728,9 +726,12 @@ SearchParams::SearchParams(const OptionsDict& options)
       // --- Root Beam Search ADDED ---
       kRootBeamWidth(options.Get<int>(kRootBeamWidthId)),
       kRootBeamUpdateThreshold(options.Get<int>(kRootBeamUpdateThresholdId)),
-      kRootBeamUpdateInterval(options.Get<int>(kRootBeamUpdateIntervalId))
+      kRootBeamUpdateInterval(options.Get<int>(kRootBeamUpdateIntervalId)),
       // --- END Root Beam Search ADDED ---
       // Removed initializers for features not present in the corrected params.h
+      kMaxOutOfOrderEvals(std::max( // Moved calculation from initializer list
+          1, static_cast<int>(kMaxOutOfOrderEvalsFactor *
+                              (kMiniBatchSize > 0 ? kMiniBatchSize : DEFAULT_MAX_PREFETCH))))
        {} // End of constructor initializer list
 
 } // namespace classic
