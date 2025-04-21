@@ -14,21 +14,19 @@
 #include <shared_mutex>
 #include <thread>
 
-// Corrected Includes (Using src/ prefix based on -I.. flag)
-#include "src/callbacks.h" // <<< Added src/ prefix
-#include "src/chess.h"     // <<< Added src/ prefix
-#include "src/position.h" // <<< Added src/ prefix
-#include "src/uciloop.h"   // <<< Added src/ prefix
-#include "src/gamestate.h" // <<< Added src/ prefix
-#include "src/neural/backend.h" // <<< Added src/ prefix
-#include "search/classic/node.h" // Keep relative path for files within the same module
+// Corrected Includes (NO prefix - Based on build flags and repo structure)
+#include "callbacks.h" // <<< Final Path Correction
+#include "chess.h"     // <<< Final Path Correction
+#include "position.h" // <<< Final Path Correction
+#include "uciloop.h"   // <<< Final Path Correction
+#include "gamestate.h" // <<< Final Path Correction
+#include "neural/backend.h"
+#include "search/classic/node.h" // Includes node.h (which uses direct includes)
 #include "search/classic/params.h"
 #include "search/classic/stoppers/timemgr.h"
-#include "src/syzygy/syzygy.h" // <<< Added src/ prefix (adjust if path differs)
-#include "src/utils/logging.h" // <<< Added src/ prefix
-#include "src/utils/mutex.h"   // <<< Added src/ prefix
-
-// Note: Includes for subprojects like protobuf or external libs might need different paths
+#include "syzygy/syzygy.h" // Path may vary
+#include "utils/logging.h"
+#include "utils/mutex.h"
 
 
 namespace lczero {
@@ -38,8 +36,14 @@ namespace classic {
 constexpr Value kValueKnownWin = kValueMate;
 constexpr Value kValueKnownLoss = -kValueMate;
 
-// TTEntry structure placeholder
-// ... (Placeholder remains the same) ...
+// TTEntry structure placeholder (assuming it's defined elsewhere or implicitly)
+// Example:
+// struct TTEntry {
+//     // ... existing fields like policy_data, value, visits, age, etc. ...
+//     bool known_win = false;
+//     bool known_loss = false;
+// };
+
 
 class Search {
  public:
@@ -87,9 +91,10 @@ class Search {
   void CancelSharedCollisions();
   PositionHistory GetPositionHistoryAtNode(const Node* node) const;
 
-  void StoreTT(PositionHash hash, Node* node);
+  // NOTE: Placeholder for StoreTT declaration
+  void StoreTT(PositionHash hash, Node* node); // PositionHash should now be defined
 
-  // ... (Member variables remain the same) ...
+
   mutable Mutex counters_mutex_ ACQUIRED_AFTER(nodes_mutex_);
   std::atomic<bool> stop_{false};
   std::condition_variable watchdog_cv_;
@@ -98,11 +103,14 @@ class Search {
   Move final_bestmove_ GUARDED_BY(counters_mutex_);
   Move final_pondermove_ GUARDED_BY(counters_mutex_);
   std::unique_ptr<SearchStopper> stopper_ GUARDED_BY(counters_mutex_);
+
   Mutex threads_mutex_;
   std::vector<std::thread> threads_ GUARDED_BY(threads_mutex_);
+
   Node* root_node_;
   SyzygyTablebase* syzygy_tb_;
   const PositionHistory& played_history_;
+
   Backend* const backend_;
   BackendAttributes backend_attributes_;
   const SearchParams params_;
@@ -112,6 +120,7 @@ class Search {
   bool root_is_in_dtz_ = false;
   std::atomic<int> tb_hits_{0};
   const MoveList root_move_filter_;
+
   mutable SharedMutex nodes_mutex_;
   EdgeAndNode current_best_edge_ GUARDED_BY(nodes_mutex_);
   Edge* last_outputted_info_edge_ GUARDED_BY(nodes_mutex_) = nullptr;
@@ -120,13 +129,17 @@ class Search {
   int64_t total_batches_ GUARDED_BY(nodes_mutex_) = 0;
   uint16_t max_depth_ GUARDED_BY(nodes_mutex_) = 0;
   uint64_t cum_depth_ GUARDED_BY(nodes_mutex_) = 0;
+
   std::optional<std::chrono::steady_clock::time_point> nps_start_time_
       GUARDED_BY(counters_mutex_);
+
   std::atomic<int> pending_searchers_{0};
   std::atomic<int> backend_waiting_counter_{0};
   std::atomic<int> thread_count_{0};
+
   std::vector<std::pair<Node*, int>> shared_collisions_
       GUARDED_BY(nodes_mutex_);
+
   std::unique_ptr<UciResponder> uci_responder_;
   ContemptMode contempt_mode_;
   friend class SearchWorker;
@@ -154,11 +167,10 @@ class SearchWorker {
   struct TaskWorkspace;
   struct PickTask;
 
-  // ... (Inner struct definitions remain the same) ...
-    struct NodeToProcess { /* ... */ };
-    struct TaskWorkspace { /* ... */ TaskWorkspace(); };
-    struct PickTask { /* ... */ PickTask(Node*, uint16_t, const std::vector<Move>&, int); PickTask(int, int); };
-
+  // Inner struct definitions remain the same as previous correct version
+  struct NodeToProcess { /* ... */ };
+  struct TaskWorkspace { /* ... */ TaskWorkspace(); };
+  struct PickTask { /* ... */ PickTask(Node*, uint16_t, const std::vector<Move>&, int); PickTask(int, int); };
 
   bool AddNodeToComputation(Node* node);
   int PrefetchIntoCache(Node* node, int budget, bool is_odd_depth);
@@ -181,32 +193,31 @@ class SearchWorker {
   void ResetTasks();
   int WaitForTasks();
 
-  // ... (Member variables remain the same) ...
-   Search* const search_;
-   std::vector<NodeToProcess> minibatch_;
-   std::unique_ptr<BackendComputation> computation_;
-   int task_workers_;
-   int target_minibatch_size_;
-   int max_out_of_order_;
-   PositionHistory history_;
-   int number_out_of_order_ = 0;
-   const SearchParams& params_;
-   std::unique_ptr<Node> precached_node_;
-   const bool moves_left_support_;
-   IterationStats iteration_stats_;
-   StoppersHints latest_time_manager_hints_;
-   Mutex picking_tasks_mutex_;
-   std::vector<PickTask> picking_tasks_;
-   std::atomic<int> task_count_ = -1;
-   std::atomic<int> task_taking_started_ = 0;
-   std::atomic<int> tasks_taken_ = 0;
-   std::atomic<int> completed_tasks_ = 0;
-   std::condition_variable task_added_;
-   std::vector<std::thread> task_threads_;
-   std::vector<TaskWorkspace> task_workspaces_;
-   TaskWorkspace main_workspace_;
-   bool exiting_ = false;
-
+  // Member variables remain the same
+  Search* const search_;
+  std::vector<NodeToProcess> minibatch_;
+  std::unique_ptr<BackendComputation> computation_;
+  int task_workers_;
+  int target_minibatch_size_;
+  int max_out_of_order_;
+  PositionHistory history_;
+  int number_out_of_order_ = 0;
+  const SearchParams& params_;
+  std::unique_ptr<Node> precached_node_;
+  const bool moves_left_support_;
+  IterationStats iteration_stats_;
+  StoppersHints latest_time_manager_hints_;
+  Mutex picking_tasks_mutex_;
+  std::vector<PickTask> picking_tasks_;
+  std::atomic<int> task_count_ = -1;
+  std::atomic<int> task_taking_started_ = 0;
+  std::atomic<int> tasks_taken_ = 0;
+  std::atomic<int> completed_tasks_ = 0;
+  std::condition_variable task_added_;
+  std::vector<std::thread> task_threads_;
+  std::vector<TaskWorkspace> task_workspaces_;
+  TaskWorkspace main_workspace_;
+  bool exiting_ = false;
 };
 
 
