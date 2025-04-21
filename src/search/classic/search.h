@@ -14,17 +14,17 @@
 #include <shared_mutex>
 #include <thread>
 
-// Corrected Includes (NO chess/ prefix - Based on repository structure)
-#include "callbacks.h" // <<< Final Path Correction
-#include "chess.h"     // <<< Final Path Correction
-#include "position.h" // <<< Final Path Correction
-#include "uciloop.h"   // <<< Final Path Correction
-#include "gamestate.h" // <<< Final Path Correction
+// Corrected Includes (Using relative paths from src/search/classic/)
+#include "../../callbacks.h" // <<< Relative Path
+#include "../../chess.h"     // <<< Relative Path
+#include "../../position.h" // <<< Relative Path
+#include "../../uciloop.h"   // <<< Relative Path
+#include "../../gamestate.h" // <<< Relative Path
 #include "neural/backend.h"
-#include "search/classic/node.h" // Includes node.h (which itself includes core files without prefix)
+#include "search/classic/node.h" // Includes node.h (which uses direct includes)
 #include "search/classic/params.h"
 #include "search/classic/stoppers/timemgr.h"
-#include "syzygy/syzygy.h" // Path may vary
+#include "syzygy/syzygy.h" // Path may vary - adjust if needed
 #include "utils/logging.h"
 #include "utils/mutex.h"
 
@@ -145,7 +145,7 @@ class Search {
   friend class SearchWorker;
 };
 
-// --- SearchWorker class ---
+// --- SearchWorker class --- (No changes needed inside the class declaration itself)
 class SearchWorker {
  public:
   SearchWorker(Search* search, const SearchParams& params);
