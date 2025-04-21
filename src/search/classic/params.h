@@ -1,3 +1,5 @@
+// --- START OF FILE search/classic/params.h ---
+
 /*
   This file is part of Leela Chess Zero.
   Copyright (C) 2018-2023 The LCZero Authors
@@ -119,7 +121,7 @@ class SearchParams {
   float GetMovesLeftQuadraticFactor() const {
     return kMovesLeftQuadraticFactor;
   }
-  // bool GetDisplayCacheUsage() const { return kDisplayCacheUsage; } // Removed if not present
+  bool GetDisplayCacheUsage() const { return kDisplayCacheUsage; } // Restored getter
   int GetMaxConcurrentSearchers() const { return kMaxConcurrentSearchers; }
   float GetDrawScore() const { return kDrawScore; }
   ContemptMode GetContemptMode() const {
@@ -137,6 +139,7 @@ class SearchParams {
   float GetMaxOutOfOrderEvalsFactor() const { // Changed return type and name
     return kMaxOutOfOrderEvalsFactor;
   }
+  uint32_t GetMaxOutOfOrderEvals() const { return kMaxOutOfOrderEvals; } // Added derived getter
   float GetNpsLimit() const { return kNpsLimit; }
   int GetSolidTreeThreshold() const { return kSolidTreeThreshold; } // Added getter
 
@@ -219,7 +222,7 @@ class SearchParams {
   static const OptionId kMovesLeftScaledFactorId;
   static const OptionId kMovesLeftQuadraticFactorId;
   static const OptionId kMovesLeftSlopeId;
-  // static const OptionId kDisplayCacheUsageId; // Removed if not present
+  static const OptionId kDisplayCacheUsageId; // Restored ID
   static const OptionId kMaxConcurrentSearchersId;
   static const OptionId kDrawScoreId;
   static const OptionId kContemptModeId;
@@ -291,7 +294,7 @@ class SearchParams {
   const float kMovesLeftConstantFactor;
   const float kMovesLeftScaledFactor;
   const float kMovesLeftQuadraticFactor;
-  const bool kDisplayCacheUsage; // Kept, assuming it's used elsewhere
+  const bool kDisplayCacheUsage; // Restored member
   const int kMaxConcurrentSearchers;
   const float kDrawScore;
   const float kContempt;
@@ -299,6 +302,7 @@ class SearchParams {
   const float kWDLMaxS; // Added member
   const float kWDLEvalObjectivity;
   const float kMaxOutOfOrderEvalsFactor; // Changed type and name
+  const uint32_t kMaxOutOfOrderEvals; // Added derived member
   const float kNpsLimit;
   const int kSolidTreeThreshold; // Added member
   const int kTaskWorkersPerSearchWorker;
@@ -317,6 +321,19 @@ class SearchParams {
   const int kRootBeamUpdateThreshold;
   const int kRootBeamUpdateInterval;
   // --- END Root Beam Search ADDED ---
+  // Removed members related to features not obviously present in the provided header:
+  // kCpuctUtilityStdevPrior, kCpuctUtilityStdevScale, kCpuctUtilityStdevPriorWeight,
+  // kUseVarianceScaling, kMoveRuleBucketing, kUncertaintyWeightingCap,
+  // kUncertaintyWeightingCoefficient, kUncertaintyWeightingExponent,
+  // kUseUncertaintyWeighting, kEasyEvalWeightDecay,
+  // kCpuctUncertaintyMinFactor, kCpuctUncertaintyMaxFactor,
+  // kCpuctUncertaintyMinUncertainty, kCpuctUncertaintyMaxUncertainty,
+  // kUseCpuctUncertainty, kJustFpuUncertainty, kTopPolicyBoost,
+  // kTopPolicyNumBoost, kTopPolicyTierTwoBoost, kTopPolicyTierTwoNumBoost,
+  // kUsePolicyBoosting, kPolicyDecayExponent, kPolicyDecayFactor,
+  // kDesperationMultiplier, kDesperationLow, kDesperationHigh,
+  // kDesperationPriorWeight, kUseDesperation, kUseCorrectionHistory,
+  // kCorrectionHistoryAlpha, kCorrectionHistoryLambda
 
 };
 
