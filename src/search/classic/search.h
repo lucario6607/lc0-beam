@@ -33,7 +33,7 @@
 #include <optional>
 #include <shared_mutex>
 #include <thread>
-#include <vector> // Added for std::vector
+#include <limits> // Required for numeric_limits
 
 #include "chess/callbacks.h"
 #include "chess/uciloop.h"
@@ -48,7 +48,22 @@
 namespace lczero {
 namespace classic {
 
-// Removed typedef for BackupPath as it seems unused in this version
+// Define constants for known win/loss based on LC0's Mate value
+constexpr Value kValueKnownWin = kValueMate;
+constexpr Value kValueKnownLoss = -kValueMate;
+
+// NOTE: TTEntry structure is not fully defined here, but assume it exists
+// and would be modified like this:
+/*
+struct TTEntry {
+    // ... existing fields like policy_data, value, visits, age, etc. ...
+
+    // --- NEW FIELDS ---
+    bool known_win = false;
+    bool known_loss = false;
+};
+*/
+
 
 class Search {
  public:
@@ -100,12 +115,6 @@ class Search {
   // Returns NN eval for a given node from cache, if that node is cached.
   std::optional<EvalResult> GetCachedNNEval(const Node* node) const;
 
-  // --- Root Beam Search ADDED ---
-  void UpdateRootBeam(Node* root_node) REQUIRES(nodes_mutex_);
-  bool IsRootBeamActive() const REQUIRES_SHARED(nodes_mutex_) { return root_beam_active_; }
-  const std::vector<int>& GetRootBeamIndices() const REQUIRES_SHARED(nodes_mutex_) { return root_beam_indices_; }
-  // --- END Root Beam Search ADDED ---
-
  private:
   // Computes the best move, maybe with temperature (according to the settings).
   void EnsureBestMoveKnown();
@@ -149,6 +158,10 @@ class Search {
   void CancelSharedCollisions();
 
   PositionHistory GetPositionHistoryAtNode(const Node* node) const;
+
+  // NOTE: Added StoreTT declaration as placeholder for where modification would occur
+  void StoreTT(PositionHash hash, Node* node);
+
 
   mutable Mutex counters_mutex_ ACQUIRED_AFTER(nodes_mutex_);
   // Tells all threads to stop.
@@ -198,12 +211,6 @@ class Search {
   uint16_t max_depth_ GUARDED_BY(nodes_mutex_) = 0;
   // Cumulative depth of all paths taken in PickNodetoExtend.
   uint64_t cum_depth_ GUARDED_BY(nodes_mutex_) = 0;
-
-  // --- Root Beam Search State ADDED ---
-  bool root_beam_active_ GUARDED_BY(nodes_mutex_) = false;
-  std::vector<int> root_beam_indices_ GUARDED_BY(nodes_mutex_);
-  uint64_t last_root_beam_update_visits_ GUARDED_BY(nodes_mutex_) = 0;
-  // --- END Root Beam Search State ADDED ---
 
   std::optional<std::chrono::steady_clock::time_point> nps_start_time_
       GUARDED_BY(counters_mutex_);
@@ -415,16 +422,17 @@ class SearchWorker {
         : task_type(kProcessing), start_idx(start_idx), end_idx(end_idx) {}
   };
 
-  NodeToProcess PickNodeToExtend(int collision_limit);
+  NodeToProcess PickNodeToExtend(int collision_limit); // Deprecated single node picker?
   bool AddNodeToComputation(Node* node);
   int PrefetchIntoCache(Node* node, int budget, bool is_odd_depth);
   void DoBackupUpdateSingleNode(const NodeToProcess& node_to_process);
   // Returns whether a node's bounds were set based on its children.
+  // Modified for new proven state logic
   bool MaybeSetBounds(Node* p, float m, int* n_to_fix, float* v_delta,
-                      float* d_delta, float* m_delta) const;
+                      float* d_delta, float* m_delta); // Removed const qualifier as it now calls non-const GetMin/MaxValue
   void PickNodesToExtend(int collision_limit);
-  void PickNodesToExtendTask(Node* starting_point, int collision_limit,
-                             int base_depth,
+  void PickNodesToExtendTask(Node* starting_point, int base_depth, // Swapped base_depth and collision_limit order
+                             int collision_limit,
                              const std::vector<Move>& moves_to_base,
                              std::vector<NodeToProcess>* receiver,
                              TaskWorkspace* workspace);
