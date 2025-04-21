@@ -16,15 +16,19 @@
 #include <utility>
 #include <vector>
 
-// Corrected Includes (NO chess/ prefix - Based on repo structure and build flags)
-#include "board.h"
-#include "callbacks.h"
-#include "chess.h"
-#include "gamestate.h"
-#include "position.h"
-#include "neural/encoder.h"
-#include "proto/net.pb.h"
-#include "utils/mutex.h"
+// Corrected Includes (Using src/ prefix based on -I.. flag)
+#include "src/board.h"     // <<< Added src/ prefix
+#include "src/callbacks.h" // <<< Added src/ prefix
+#include "src/chess.h"     // <<< Added src/ prefix
+#include "src/gamestate.h" // <<< Added src/ prefix
+#include "src/position.h" // <<< Added src/ prefix
+#include "src/neural/encoder.h" // <<< Added src/ prefix
+#include "src/proto/net.pb.h" // <<< Assuming path is relative to build/project root
+#include "src/utils/mutex.h" // <<< Added src/ prefix
+
+// Note: If proto/net.pb.h is generated *inside* the build dir,
+// its include might need to be different, e.g., "proto/net.pb.h" or relative from build.
+// But let's try this first.
 
 namespace lczero {
 namespace classic {
@@ -313,4 +317,3 @@ class NodeTree {
 
 }  // namespace classic
 }  // namespace lczero
-
