@@ -16,12 +16,12 @@
 #include <utility>
 #include <vector>
 
-// Corrected Includes (NO chess/ prefix)
-#include "board.h"     // <<< Removed prefix
-#include "callbacks.h" // <<< Removed prefix
-#include "chess.h"     // <<< Removed prefix - CRUCIAL
-#include "gamestate.h" // <<< Removed prefix
-#include "position.h" // <<< Removed prefix - CRUCIAL
+// Corrected Includes (NO chess/ prefix - confirmed from repo)
+#include "board.h"     // <<< Final Path Correction
+#include "callbacks.h" // <<< Final Path Correction
+#include "chess.h"     // <<< Final Path Correction
+#include "gamestate.h" // <<< Final Path Correction
+#include "position.h" // <<< Final Path Correction
 #include "neural/encoder.h"
 #include "proto/net.pb.h"
 #include "utils/mutex.h"
@@ -313,4 +313,3 @@ class NodeTree {
 
 }  // namespace classic
 }  // namespace lczero
-
