@@ -5,6 +5,7 @@ image:
 - Visual Studio 2019
 environment:
   matrix:
+#  - NAME: gpu-opencl
   - NAME: cpu-dnnl
   - NAME: cpu-openblas
 #  - NAME: onednn
