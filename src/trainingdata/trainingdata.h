@@ -98,7 +98,7 @@ class V6TrainingDataArray {
 
   // Add a chunk.
   void Add(const classic::Node* node, const PositionHistory& history,
-           lczero::Eval best_eval, lczero::Eval played_eval,
+           Eval best_eval, Eval played_eval,
            bool best_is_proven, Move best_move, Move played_move,
            std::span<Move> legal_moves,
            const std::optional<EvalResult>& nneval, float policy_softmax_temp);
