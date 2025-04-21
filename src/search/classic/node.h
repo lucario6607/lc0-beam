@@ -73,7 +73,6 @@ class Edge {
   friend class Edge_Iterator<false>;
 };
 
-
 class Node {
  public:
   using Iterator = Edge_Iterator<false>;
