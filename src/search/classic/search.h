@@ -14,20 +14,19 @@
 #include <shared_mutex>
 #include <thread>
 
-// Corrected Includes (NO chess/ prefix)
-#include "callbacks.h" // <<< Removed prefix
-#include "chess.h"     // <<< Removed prefix - CRUCIAL
-#include "position.h" // <<< Removed prefix - CRUCIAL
-#include "uciloop.h"   // <<< Removed prefix
+// Corrected Includes (Mixed paths - trying chess/ prefix for callbacks/uciloop again)
+#include "chess/callbacks.h" // <<< Added prefix back
+#include "chess/uciloop.h"   // <<< Added prefix back
+#include "chess.h"           // <<< NO prefix - Core type definitions
+#include "position.h"       // <<< NO prefix - Position/hash definitions
+#include "gamestate.h"       // <<< NO prefix - For PositionHistory
 #include "neural/backend.h"
-#include "search/classic/node.h" // Includes the corrected node.h
+#include "search/classic/node.h" // Includes node.h (which itself includes core files without prefix)
 #include "search/classic/params.h"
 #include "search/classic/stoppers/timemgr.h"
-#include "syzygy/syzygy.h" // Path may vary depending on Syzygy integration
+#include "syzygy/syzygy.h" // Path may vary
 #include "utils/logging.h"
 #include "utils/mutex.h"
-// Need gamestate.h for PositionHistory used below
-#include "gamestate.h"     // <<< Removed prefix
 
 
 namespace lczero {
@@ -146,11 +145,11 @@ class Search {
   friend class SearchWorker;
 };
 
-// --- SearchWorker class ---
+// --- SearchWorker class --- (No changes needed inside the class declaration itself)
 class SearchWorker {
  public:
-  SearchWorker(Search* search, const SearchParams& params); // Constructor Declaration
-  ~SearchWorker(); // Destructor Declaration
+  SearchWorker(Search* search, const SearchParams& params);
+  ~SearchWorker();
 
   void RunBlocking();
   void ExecuteOneIteration();
@@ -164,20 +163,19 @@ class SearchWorker {
   void UpdateCounters();
 
  private:
-  struct NodeToProcess; // Forward declare inner struct
-  struct TaskWorkspace; // Forward declare inner struct
-  struct PickTask;      // Forward declare inner struct
+  struct NodeToProcess;
+  struct TaskWorkspace;
+  struct PickTask;
 
-  // NodeToProcess Definition
   struct NodeToProcess {
-    bool IsExtendable() const { return node && !is_collision && !node->IsTerminal(); } // Add null check
+    bool IsExtendable() const { return node && !is_collision && !node->IsTerminal(); }
     bool IsCollision() const { return is_collision; }
     bool CanEvalOutOfOrder() const {
-      return node && (is_cache_hit || node->IsTerminal()); // Add null check
+      return node && (is_cache_hit || node->IsTerminal());
     }
 
     Node* node;
-    std::unique_ptr<EvalResult> eval; // Use EvalResult from proto
+    std::unique_ptr<EvalResult> eval;
     int multivisit = 0;
     int maxvisit = 0;
     uint16_t depth;
@@ -203,14 +201,13 @@ class SearchWorker {
     NodeToProcess(Node* node, uint16_t depth, bool is_collision, int multivisit,
                   int max_count)
         : node(node),
-          eval(std::make_unique<EvalResult>()), // Use EvalResult
+          eval(std::make_unique<EvalResult>()),
           multivisit(multivisit),
           maxvisit(max_count),
           depth(depth),
           is_collision(is_collision) {}
   };
 
-  // TaskWorkspace Definition
   struct TaskWorkspace {
     std::array<Node::Iterator, 256> cur_iters;
     std::vector<std::unique_ptr<std::array<int, 256>>> vtp_buffer;
@@ -219,38 +216,33 @@ class SearchWorker {
     std::vector<int> current_path;
     std::vector<Move> moves_to_path;
     PositionHistory history;
-    TaskWorkspace(); // Default constructor declaration
+    TaskWorkspace();
   };
 
-   // PickTask Definition
   struct PickTask {
     enum PickTaskType { kGathering, kProcessing };
     PickTaskType task_type;
-
     Node* start;
     int base_depth;
     int collision_limit;
     std::vector<Move> moves_to_base;
     std::vector<NodeToProcess> results;
-
     int start_idx;
     int end_idx;
-
     bool complete = false;
 
     PickTask(Node* node, uint16_t depth, const std::vector<Move>& base_moves,
-             int collision_limit); // Constructor declaration
-    PickTask(int start_idx, int end_idx); // Constructor declaration
+             int collision_limit);
+    PickTask(int start_idx, int end_idx);
   };
-
 
   bool AddNodeToComputation(Node* node);
   int PrefetchIntoCache(Node* node, int budget, bool is_odd_depth);
   void DoBackupUpdateSingleNode(const NodeToProcess& node_to_process);
-  bool MaybeSetBounds(Node* p, float m, int* n_to_fix, Value* v_delta, // Use Value*
+  bool MaybeSetBounds(Node* p, float m, int* n_to_fix, Value* v_delta,
                       float* d_delta, float* m_delta);
   void PickNodesToExtend(int collision_limit);
-  void PickNodesToExtendTask(Node* starting_point, int base_depth, // Corrected order
+  void PickNodesToExtendTask(Node* starting_point, int base_depth,
                              int collision_limit,
                              const std::vector<Move>& moves_to_base,
                              std::vector<NodeToProcess>* receiver,
