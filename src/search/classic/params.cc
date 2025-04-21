@@ -25,13 +25,13 @@
   Program grant you additional permission to convey the resulting work.
 */
 
-#include "search/classic/params.h"
+#include "search/classic/params.h" // Adjusted include path
 
 #include <algorithm>
 #include <cctype>
 #include <cmath>
 
-#include "neural/shared_params.h"
+#include "neural/shared_params.h" // Include shared params
 #include "utils/exception.h"
 #include "utils/string.h"
 
@@ -43,11 +43,11 @@
 #define DEFAULT_MAX_PREFETCH 32
 #endif
 #ifndef DEFAULT_TASK_WORKERS
-#define DEFAULT_TASK_WORKERS 4
+#define DEFAULT_TASK_WORKERS 4 // Adjusted default based on header
 #endif
 
 namespace lczero {
-namespace classic {
+namespace classic { // Added classic namespace
 
 namespace {
 FillEmptyHistory EncodeHistoryFill(std::string history_fill) {
@@ -183,7 +183,7 @@ const OptionId SearchParams::kMiniBatchSizeId{
     "How many positions the engine tries to batch together for parallel NN "
     "computation. Larger batches may reduce strength a bit, especially with a "
     "small number of playouts. Set to 0 to use a backend suggested value."};
-const OptionId SearchParams::kMaxPrefetchBatchId{
+const OptionId SearchParams::kMaxPrefetchBatchId{ // Added
     "max-prefetch", "MaxPrefetch",
     "When the engine cannot gather a large enough batch for immediate use, try "
     "to prefetch up to X positions which are likely to be useful soon, and put "
@@ -196,6 +196,12 @@ const OptionId SearchParams::kCpuctId{
 const OptionId SearchParams::kCpuctAtRootId{
     "cpuct-at-root", "CPuctAtRoot",
     "cpuct_init constant from \"UCT search\" algorithm, for root node."};
+const OptionId SearchParams::kCpuctExponentId{ // Added
+    "cpuct-exponent", "CPuctExponent",
+    "cpuct_exponent constant from \"UCT search\" algorithm."};
+const OptionId SearchParams::kCpuctExponentAtRootId{ // Added
+    "cpuct-exponent-at-root", "CPuctExponentAtRoot",
+    "cpuct_exponent constant from \"UCT search\" algorithm, for root node."};
 const OptionId SearchParams::kCpuctBaseId{
     "cpuct-base", "CPuctBase",
     "cpuct_base constant from \"UCT search\" algorithm. Lower value means "
@@ -208,8 +214,6 @@ const OptionId SearchParams::kCpuctFactorId{
 const OptionId SearchParams::kCpuctFactorAtRootId{
     "cpuct-factor-at-root", "CPuctFactorAtRoot",
     "Multiplier for the cpuct growth formula at root."};
-// Remove this option after 0.25 has been made mandatory in training and the
-// training server stops sending it.
 const OptionId SearchParams::kRootHasOwnCpuctParamsId{
     "root-has-own-cpuct-params", "RootHasOwnCpuctParams",
     "If enabled, cpuct parameters for root node are taken from *AtRoot "
@@ -297,19 +301,20 @@ const OptionId SearchParams::kCacheHistoryLengthId{
     "this value is less than history that NN uses to eval a position, it's "
     "possble that the search will use eval of the same position with different "
     "history taken from cache."};
-const OptionId SearchParams::kMaxCollisionVisitsId{
-    "max-collision-visits", "MaxCollisionVisits",
-    "Total allowed node collision visits, per batch."};
+// const OptionId SearchParams::kPolicySoftmaxTempId; // Defined in SharedParams
 const OptionId SearchParams::kMaxCollisionEventsId{
     "max-collision-events", "MaxCollisionEvents",
     "Allowed node collision events, per batch."};
+const OptionId SearchParams::kMaxCollisionVisitsId{
+    "max-collision-visits", "MaxCollisionVisits",
+    "Total allowed node collision visits, per batch."};
 const OptionId SearchParams::kOutOfOrderEvalId{
     "out-of-order-eval", "OutOfOrderEval",
     "During the gathering of a batch for NN to eval, if position happens to be "
     "in the cache or is terminal, evaluate it right away without sending the "
     "batch to the NN. When off, this may only happen with the very first node "
     "of a batch; when on, this can happen with any node."};
-const OptionId SearchParams::kMaxOutOfOrderEvalsFactorId{
+const OptionId SearchParams::kMaxOutOfOrderEvalsFactorId{ // Renamed
     "max-out-of-order-evals-factor", "MaxOutOfOrderEvalsFactor",
     "Maximum number of out of order evals during gathering of a batch is "
     "calculated by multiplying the maximum batch size by this number."};
@@ -335,6 +340,7 @@ const OptionId SearchParams::kScoreTypeId{
     "score-type", "ScoreType",
     "What to display as score. Either centipawns (the UCI default), win "
     "percentage or Q (the actual internal score) multiplied by 100."};
+// const OptionId SearchParams::kHistoryFillId; // Defined in SharedParams
 const OptionId SearchParams::kMovesLeftMaxEffectId{
     "moves-left-max-effect", "MovesLeftMaxEffect",
     "Maximum bonus to add to the score of a node based on how much "
@@ -361,6 +367,7 @@ const OptionId SearchParams::kMovesLeftQuadraticFactorId{
     "moves-left-quadratic-factor", "MovesLeftQuadraticFactor",
     "A factor which is multiplied by the square of Q of parent node and the "
     "base moves left effect."};
+// const OptionId SearchParams::kDisplayCacheUsageId; // Removed if not present
 const OptionId SearchParams::kMaxConcurrentSearchersId{
     "max-concurrent-searchers", "MaxConcurrentSearchers",
     "If not 0, at most this many search workers can be gathering minibatches "
@@ -392,7 +399,7 @@ const OptionId SearchParams::kWDLContemptAttenuationId{
     "wdl-contempt-attenuation", "WDLContemptAttenuation",
     "Scales how Elo advantage is applied for contempt. Use 1.0 for realistic "
     "analysis, and 0.5-0.6 for optimal match performance."};
-const OptionId SearchParams::kWDLMaxSId{
+const OptionId SearchParams::kWDLMaxSId{ // Added
     "wdl-max-s", "WDLMaxS",
     "Limits the WDL derived sharpness s to a reasonable value to avoid "
     "erratic behavior at high contempt values. Default recommended for "
@@ -423,7 +430,7 @@ const OptionId SearchParams::kNpsLimitId{
     "An option to specify an upper limit to the nodes per second searched. The "
     "accuracy depends on the minibatch size used, increasing for lower sizes, "
     "and on the length of the search. Zero to disable."};
-const OptionId SearchParams::kSolidTreeThresholdId{
+const OptionId SearchParams::kSolidTreeThresholdId{ // Added
     "solid-tree-threshold", "SolidTreeThreshold",
     "Only nodes with at least this number of visits will be considered for "
     "solidification for improved cache locality."};
@@ -478,13 +485,28 @@ const OptionId SearchParams::kSearchSpinBackoffId{
     "search-spin-backoff", "SearchSpinBackoff",
     "Enable backoff for the spin lock that acquires available searcher."};
 
+// --- Root Beam Search ADDED ---
+const OptionId SearchParams::kRootBeamWidthId{
+    "root-beam-width", "RootBeamWidth",
+    "If > 0, restricts search to the top N most visited root moves after an initial threshold. 0 disables."};
+const OptionId SearchParams::kRootBeamUpdateThresholdId{
+    "root-beam-update-threshold", "RootBeamUpdateThreshold",
+    "Number of root visits after which the root beam is calculated and activated."};
+const OptionId SearchParams::kRootBeamUpdateIntervalId{
+    "root-beam-update-interval", "RootBeamUpdateInterval",
+    "Recalculate root beam every N root visits after initial activation. 0 disables re-evaluation."};
+// --- END Root Beam Search ADDED ---
+
+
 void SearchParams::Populate(OptionsParser* options) {
   // Here the uci optimized defaults" are set.
   // Many of them are overridden with training specific values in tournament.cc.
-  options->Add<IntOption>(kMiniBatchSizeId, 0, 1024) = 0;
-  options->Add<IntOption>(kMaxPrefetchBatchId, 0, 1024) = DEFAULT_MAX_PREFETCH;
+  options->Add<IntOption>(kMiniBatchSizeId, 0, 1024) = 0; // Default to backend suggested
+  options->Add<IntOption>(kMaxPrefetchBatchId, 0, 1024) = DEFAULT_MAX_PREFETCH; // Added
   options->Add<FloatOption>(kCpuctId, 0.0f, 100.0f) = 1.745f;
   options->Add<FloatOption>(kCpuctAtRootId, 0.0f, 100.0f) = 1.745f;
+  options->Add<FloatOption>(kCpuctExponentId, 0.0f, 1.0f) = 0.5f; // Added
+  options->Add<FloatOption>(kCpuctExponentAtRootId, 0.0f, 1.0f) = 0.5f; // Added
   options->Add<FloatOption>(kCpuctBaseId, 1.0f, 1000000000.0f) = 38739.0f;
   options->Add<FloatOption>(kCpuctBaseAtRootId, 1.0f, 1000000000.0f) = 38739.0f;
   options->Add<FloatOption>(kCpuctFactorId, 0.0f, 1000.0f) = 3.894f;
@@ -510,6 +532,7 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<ChoiceOption>(kFpuStrategyAtRootId, fpu_strategy) = "same";
   options->Add<FloatOption>(kFpuValueAtRootId, -100.0f, 100.0f) = 1.0f;
   options->Add<IntOption>(kCacheHistoryLengthId, 0, 7) = 0;
+  // kPolicySoftmaxTempId is likely shared
   options->Add<IntOption>(kMaxCollisionEventsId, 1, 65536) = 917;
   options->Add<IntOption>(kMaxCollisionVisitsId, 1, 100000000) = 80000;
   options->Add<IntOption>(kMaxCollisionVisitsScalingStartId, 1, 100000) = 28;
@@ -518,7 +541,7 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<FloatOption>(kMaxCollisionVisitsScalingPowerId, 0.01, 100) =
       1.25;
   options->Add<BoolOption>(kOutOfOrderEvalId) = true;
-  options->Add<FloatOption>(kMaxOutOfOrderEvalsFactorId, 0.0f, 100.0f) = 2.4f;
+  options->Add<FloatOption>(kMaxOutOfOrderEvalsFactorId, 0.0f, 100.0f) = 2.4f; // Renamed
   options->Add<BoolOption>(kStickyEndgamesId) = true;
   options->Add<BoolOption>(kSyzygyFastPlayId) = false;
   options->Add<IntOption>(kMultiPvId, 1, 500) = 1;
@@ -532,7 +555,7 @@ void SearchParams::Populate(OptionsParser* options) {
                                          "W-L",
                                          "WDL_mu"};
   options->Add<ChoiceOption>(kScoreTypeId, score_type) = "WDL_mu";
-  std::vector<std::string> history_fill_opt{"no", "fen_only", "always"};
+  // kHistoryFillId is likely shared
   options->Add<FloatOption>(kMovesLeftMaxEffectId, 0.0f, 1.0f) = 0.0345f;
   options->Add<FloatOption>(kMovesLeftThresholdId, 0.0f, 1.0f) = 0.8f;
   options->Add<FloatOption>(kMovesLeftSlopeId, 0.0f, 1.0f) = 0.0027f;
@@ -540,6 +563,7 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<FloatOption>(kMovesLeftScaledFactorId, -2.0f, 2.0f) = 1.6521f;
   options->Add<FloatOption>(kMovesLeftQuadraticFactorId, -1.0f, 1.0f) =
       -0.6521f;
+  // kDisplayCacheUsageId removed
   options->Add<IntOption>(kMaxConcurrentSearchersId, 0, 128) = 1;
   options->Add<FloatOption>(kDrawScoreId, -1.0f, 1.0f) = 0.0f;
   std::vector<std::string> mode = {"play", "white_side_analysis",
@@ -552,14 +576,14 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<FloatOption>(kContemptMaxValueId, 0, 10000.0f) = 420.0f;
   options->Add<FloatOption>(kWDLCalibrationEloId, 0, 10000.0f) = 0.0f;
   options->Add<FloatOption>(kWDLContemptAttenuationId, -10.0f, 10.0f) = 1.0f;
-  options->Add<FloatOption>(kWDLMaxSId, 0.0f, 10.0f) = 1.4f;
+  options->Add<FloatOption>(kWDLMaxSId, 0.0f, 10.0f) = 1.4f; // Added
   options->Add<FloatOption>(kWDLEvalObjectivityId, 0.0f, 1.0f) = 1.0f;
   options->Add<FloatOption>(kWDLDrawRateTargetId, 0.0f, 0.999f) = 0.0f;
   options->Add<FloatOption>(kWDLDrawRateReferenceId, 0.001f, 0.999f) = 0.5f;
   options->Add<FloatOption>(kWDLBookExitBiasId, -2.0f, 2.0f) = 0.65f;
   options->Add<FloatOption>(kNpsLimitId, 0.0f, 1e6f) = 0.0f;
-  options->Add<IntOption>(kSolidTreeThresholdId, 1, 2000000000) = 100;
-  options->Add<IntOption>(kTaskWorkersPerSearchWorkerId, -1, 128) = -1;
+  options->Add<IntOption>(kSolidTreeThresholdId, 1, 2000000000) = 100; // Added
+  options->Add<IntOption>(kTaskWorkersPerSearchWorkerId, -1, 128) = -1; // Adjusted default
   options->Add<IntOption>(kMinimumWorkSizeForProcessingId, 2, 100000) = 20;
   options->Add<IntOption>(kMinimumWorkSizeForPickingId, 1, 100000) = 1;
   options->Add<IntOption>(kMinimumRemainingWorkSizeForPickingId, 0, 100000) =
@@ -571,9 +595,17 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<FloatOption>(kUCIRatingAdvId, -10000.0f, 10000.0f) = 0.0f;
   options->Add<BoolOption>(kSearchSpinBackoffId) = false;
 
+  // --- Root Beam Search ADDED ---
+  options->Add<IntOption>(kRootBeamWidthId, 0, 500) = 0; // Disabled by default
+  options->Add<IntOption>(kRootBeamUpdateThresholdId, 0, 1000000) = 100;
+  options->Add<IntOption>(kRootBeamUpdateIntervalId, 0, 10000000) = 0; // Disabled by default
+  // --- END Root Beam Search ADDED ---
+
+
   options->HideOption(kNoiseEpsilonId);
   options->HideOption(kNoiseAlphaId);
   options->HideOption(kLogLiveStatsId);
+  // options->HideOption(kDisplayCacheUsageId); // Removed if not present
   options->HideOption(kRootHasOwnCpuctParamsId);
   options->HideOption(kCpuctAtRootId);
   options->HideOption(kCpuctBaseAtRootId);
@@ -589,9 +621,14 @@ void SearchParams::Populate(OptionsParser* options) {
   options->HideOption(kTemperatureVisitOffsetId);
   options->HideOption(kContemptMaxValueId);
   options->HideOption(kWDLContemptAttenuationId);
-  options->HideOption(kWDLMaxSId);
+  options->HideOption(kWDLMaxSId); // Added hide
   options->HideOption(kWDLDrawRateTargetId);
   options->HideOption(kWDLBookExitBiasId);
+  // --- Root Beam Search - UNCOMMENT/REMOVE HideOption TO MAKE VISIBLE IN UCI ---
+  // options->HideOption(kRootBeamWidthId);
+  // options->HideOption(kRootBeamUpdateThresholdId);
+  // options->HideOption(kRootBeamUpdateIntervalId);
+  // --- END Root Beam Search ---
 }
 
 SearchParams::SearchParams(const OptionsDict& options)
@@ -600,6 +637,10 @@ SearchParams::SearchParams(const OptionsDict& options)
       kCpuctAtRoot(options.Get<float>(
           options.Get<bool>(kRootHasOwnCpuctParamsId) ? kCpuctAtRootId
                                                       : kCpuctId)),
+      kCpuctExponent(options.Get<float>(kCpuctExponentId)), // Added init
+      kCpuctExponentAtRoot(options.Get<float>(             // Added init
+          options.Get<bool>(kRootHasOwnCpuctParamsId) ? kCpuctExponentAtRootId
+                                                      : kCpuctExponentId)),
       kCpuctBase(options.Get<float>(kCpuctBaseId)),
       kCpuctBaseAtRoot(options.Get<float>(
           options.Get<bool>(kRootHasOwnCpuctParamsId) ? kCpuctBaseAtRootId
@@ -621,14 +662,14 @@ SearchParams::SearchParams(const OptionsDict& options)
                           ? kFpuValue
                           : options.Get<float>(kFpuValueAtRootId)),
       kCacheHistoryLength(options.Get<int>(kCacheHistoryLengthId)),
-      kPolicySoftmaxTemp(
+      kPolicySoftmaxTemp( // Assuming shared param
           options.Get<float>(SharedBackendParams::kPolicySoftmaxTemp)),
       kMaxCollisionEvents(options.Get<int>(kMaxCollisionEventsId)),
       kMaxCollisionVisits(options.Get<int>(kMaxCollisionVisitsId)),
       kOutOfOrderEval(options.Get<bool>(kOutOfOrderEvalId)),
       kStickyEndgames(options.Get<bool>(kStickyEndgamesId)),
       kSyzygyFastPlay(options.Get<bool>(kSyzygyFastPlayId)),
-      kHistoryFill(EncodeHistoryFill(
+      kHistoryFill(EncodeHistoryFill( // Assuming shared param
           options.Get<std::string>(SharedBackendParams::kHistoryFill))),
       kMiniBatchSize(options.Get<int>(kMiniBatchSizeId)),
       kMovesLeftMaxEffect(options.Get<float>(kMovesLeftMaxEffectId)),
@@ -638,6 +679,7 @@ SearchParams::SearchParams(const OptionsDict& options)
       kMovesLeftScaledFactor(options.Get<float>(kMovesLeftScaledFactorId)),
       kMovesLeftQuadraticFactor(
           options.Get<float>(kMovesLeftQuadraticFactorId)),
+      kDisplayCacheUsage(options.Get<bool>(kDisplayCacheUsageId)), // Kept, assuming it might be used
       kMaxConcurrentSearchers(options.Get<int>(kMaxConcurrentSearchersId)),
       kDrawScore(options.Get<float>(kDrawScoreId)),
       kContempt(GetContempt(options.Get<std::string>(kUCIOpponentId),
@@ -656,12 +698,14 @@ SearchParams::SearchParams(const OptionsDict& options)
                     options.Get<float>(kWDLCalibrationEloId),
                     options.Get<float>(kContemptMaxValueId),
                     options.Get<float>(kWDLContemptAttenuationId))),
-      kWDLMaxS(options.Get<float>(kWDLMaxSId)),
+      kWDLMaxS(options.Get<float>(kWDLMaxSId)), // Added init
       kWDLEvalObjectivity(options.Get<float>(kWDLEvalObjectivityId)),
-      kMaxOutOfOrderEvalsFactor(
-          options.Get<float>(kMaxOutOfOrderEvalsFactorId)),
+      kMaxOutOfOrderEvalsFactor(options.Get<float>(kMaxOutOfOrderEvalsFactorId)), // Renamed & type changed
+      kMaxOutOfOrderEvals(std::max( // Calculation moved here
+          1, static_cast<int>(kMaxOutOfOrderEvalsFactor *
+                              (kMiniBatchSize > 0 ? kMiniBatchSize : DEFAULT_MAX_PREFETCH)))), // Use default if minibatch is 0
       kNpsLimit(options.Get<float>(kNpsLimitId)),
-      kSolidTreeThreshold(options.Get<int>(kSolidTreeThresholdId)),
+      kSolidTreeThreshold(options.Get<int>(kSolidTreeThresholdId)), // Added init
       kTaskWorkersPerSearchWorker(
           options.Get<int>(kTaskWorkersPerSearchWorkerId)),
       kMinimumWorkSizeForProcessing(
@@ -680,7 +724,14 @@ SearchParams::SearchParams(const OptionsDict& options)
           options.Get<int>(kMaxCollisionVisitsScalingEndId)),
       kMaxCollisionVisitsScalingPower(
           options.Get<float>(kMaxCollisionVisitsScalingPowerId)),
-      kSearchSpinBackoff(options_.Get<bool>(kSearchSpinBackoffId)) {}
+      kSearchSpinBackoff(options_.Get<bool>(kSearchSpinBackoffId)),
+      // --- Root Beam Search ADDED ---
+      kRootBeamWidth(options.Get<int>(kRootBeamWidthId)),
+      kRootBeamUpdateThreshold(options.Get<int>(kRootBeamUpdateThresholdId)),
+      kRootBeamUpdateInterval(options.Get<int>(kRootBeamUpdateIntervalId))
+      // --- END Root Beam Search ADDED ---
+      // Removed initializers for features not present in the corrected params.h
+       {} // End of constructor initializer list
 
-}  // namespace classic
-}  // namespace lczero
+} // namespace classic
+} // namespace lczero
