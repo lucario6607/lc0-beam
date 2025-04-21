@@ -40,20 +40,23 @@
 #include "neural/encoder.h"
 #include "proto/net.pb.h"
 #include "utils/mutex.h"
+#include "utils/nonparallelvector.h" // Include for NonParallelVector
 
 namespace lczero {
 namespace classic {
 
-// Children of a node are stored the following way:
-// * Edges and Nodes edges point to are stored separately.
-// * There may be dangling edges (which don't yet point to any Node object yet)
-// * Edges are stored are a simple array on heap.
-// * Nodes are stored as a linked list, and contain index_ field which shows
-//   which edge of a parent that node points to.
-//   Or they are stored a contiguous array of Node objects on the heap if
-//   solid_children_ is true. If the children have been 'solidified' their
-//   sibling links are unused and left empty. In this state there are no
-//   dangling edges, but the nodes may not have ever received any visits.
+// Terminology:
+// * Edge - a potential edge with a move and policy information.
+// * Node - an existing edge with number of visits and evaluation.
+// * LowNode - a node with number of visits, evaluation and edges.
+//
+// Storage:
+// * Potential edges are stored in a simple array inside the LowNode as edges_.
+// * Existing edges are stored in a linked list starting with a child_ pointer
+//   in the LowNode and continuing with a sibling_ pointer in each Node.
+// * Existing edges have a copy of their potential edge counterpart, index_
+//   among potential edges and are linked to the target LowNode via the
+//   low_node_ pointer.
 //
 // Example:
 //                                Parent Node
@@ -217,13 +220,6 @@ class Node {
   // or visiting terminal nodes several times), it amplifies the visit by
   // incrementing n_in_flight.
   void IncrementNInFlight(int multivisit) { n_in_flight_ += multivisit; }
-
-  // Updates max depth, if new depth is larger.
-  void UpdateMaxDepth(int depth);
-
-  // Calculates the full depth if new depth is larger, updates it, returns
-  // in depth parameter, and returns true if it was indeed updated.
-  bool UpdateFullDepth(uint16_t* depth);
 
   // Returns range for iterating over edges.
   ConstIterator Edges() const;
@@ -539,6 +535,13 @@ class Edge_Iterator : public EdgeAndNode {
   uint16_t current_idx_ = 0;
   uint16_t total_count_ = 0;
 };
+
+inline Node::ConstIterator Node::Edges() const {
+  return {*this, !solid_children_ ? &child_ : nullptr};
+}
+inline Node::Iterator Node::Edges() {
+  return {*this, !solid_children_ ? &child_ : nullptr};
+}
 
 // TODO(crem) Replace this with less hacky iterator once we support C++17.
 // This class has multiple hypostases within one class:
