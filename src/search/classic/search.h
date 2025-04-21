@@ -17,13 +17,13 @@
 #include <utility>
 
 // Corrected Includes (Using chess/ prefix consistently)
-#include "chess/callbacks.h" // Defines ThinkingInfo, IterationStats, StoppersHints (likely in lczero namespace)
+#include "chess/callbacks.h" // Defines lczero::ThinkingInfo, lczero::IterationStats, lczero::StoppersHints
 #include "chess/types.h"     // <<< Defines lczero::Value, lczero::Move, lczero::Eval etc.
 #include "chess/position.h" // <<< Defines lczero::PositionHash, lczero::Position
 #include "chess/uciloop.h"   // <<< Defines lczero::UciResponder
 #include "chess/gamestate.h" // <<< Defines lczero::PositionHistory
 #include "neural/backend.h"
-#include "search/classic/node.h" // Includes node.h (which uses chess/ prefix)
+#include "search/classic/node.h" // Includes node.h (which uses chess/ prefix and lczero::)
 #include "search/classic/params.h"
 #include "search/classic/stoppers/timemgr.h" // <<< Defines classic::SearchStopper
 #include "syzygy/syzygy.h" // Path may vary, defines lczero::SyzygyTablebase?
@@ -49,7 +49,7 @@ class Search {
  public:
   Search(const NodeTree& tree, lczero::Backend* network, // Use lczero::
          std::unique_ptr<lczero::UciResponder> uci_responder, // Use lczero::
-         const lczero::MoveList& searchmoves, // <<< Use lczero::
+         const lczero::MoveList& searchmoves, // Use lczero::
          std::chrono::steady_clock::time_point start_time,
          std::unique_ptr<SearchStopper> stopper, bool infinite, bool ponder, // <<< Use UNQUALIFIED SearchStopper
          const lczero::OptionsDict& options, lczero::SyzygyTablebase* syzygy_tb); // Use lczero::
@@ -63,7 +63,7 @@ class Search {
   void Wait();
   bool IsSearchActive() const;
 
-  std::pair<lczero::Move, lczero::Move> GetBestMove(); // <<< Use lczero::
+  std::pair<lczero::Move, lczero::Move> GetBestMove(); // Use lczero::
   lczero::Eval GetBestEval(lczero::Move* move = nullptr, bool* is_terminal = nullptr) const; // <<< Use lczero::
   std::int64_t GetTotalPlayouts() const;
   const SearchParams& GetParams() const { return params_; }
