@@ -1,3 +1,5 @@
+// --- START OF FILE search/classic/params.cc ---
+
 /*
   This file is part of Leela Chess Zero.
   Copyright (C) 2018-2023 The LCZero Authors
@@ -367,7 +369,9 @@ const OptionId SearchParams::kMovesLeftQuadraticFactorId{
     "moves-left-quadratic-factor", "MovesLeftQuadraticFactor",
     "A factor which is multiplied by the square of Q of parent node and the "
     "base moves left effect."};
-// const OptionId SearchParams::kDisplayCacheUsageId; // Removed if not present
+const OptionId SearchParams::kDisplayCacheUsageId{ // Restored Definition
+    "display-cache-usage", "DisplayCacheUsage",
+    "Display cache fullness through UCI info `hash` section."};
 const OptionId SearchParams::kMaxConcurrentSearchersId{
     "max-concurrent-searchers", "MaxConcurrentSearchers",
     "If not 0, at most this many search workers can be gathering minibatches "
@@ -563,7 +567,7 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<FloatOption>(kMovesLeftScaledFactorId, -2.0f, 2.0f) = 1.6521f;
   options->Add<FloatOption>(kMovesLeftQuadraticFactorId, -1.0f, 1.0f) =
       -0.6521f;
-  // kDisplayCacheUsageId removed
+  options->Add<BoolOption>(kDisplayCacheUsageId) = false; // Restored Add
   options->Add<IntOption>(kMaxConcurrentSearchersId, 0, 128) = 1;
   options->Add<FloatOption>(kDrawScoreId, -1.0f, 1.0f) = 0.0f;
   std::vector<std::string> mode = {"play", "white_side_analysis",
@@ -605,7 +609,7 @@ void SearchParams::Populate(OptionsParser* options) {
   options->HideOption(kNoiseEpsilonId);
   options->HideOption(kNoiseAlphaId);
   options->HideOption(kLogLiveStatsId);
-  // options->HideOption(kDisplayCacheUsageId); // Removed if not present
+  options->HideOption(kDisplayCacheUsageId); // Restored Hide
   options->HideOption(kRootHasOwnCpuctParamsId);
   options->HideOption(kCpuctAtRootId);
   options->HideOption(kCpuctBaseAtRootId);
@@ -679,7 +683,7 @@ SearchParams::SearchParams(const OptionsDict& options)
       kMovesLeftScaledFactor(options.Get<float>(kMovesLeftScaledFactorId)),
       kMovesLeftQuadraticFactor(
           options.Get<float>(kMovesLeftQuadraticFactorId)),
-      // kDisplayCacheUsage(options.Get<bool>(kDisplayCacheUsageId)), // Removed initialization
+      kDisplayCacheUsage(options.Get<bool>(kDisplayCacheUsageId)), // Restored initialization
       kMaxConcurrentSearchers(options.Get<int>(kMaxConcurrentSearchersId)),
       kDrawScore(options.Get<float>(kDrawScoreId)),
       kContempt(GetContempt(options.Get<std::string>(kUCIOpponentId),
@@ -701,7 +705,7 @@ SearchParams::SearchParams(const OptionsDict& options)
       kWDLMaxS(options.Get<float>(kWDLMaxSId)), // Added init
       kWDLEvalObjectivity(options.Get<float>(kWDLEvalObjectivityId)),
       kMaxOutOfOrderEvalsFactor(options.Get<float>(kMaxOutOfOrderEvalsFactorId)), // Renamed & type changed
-      // kMaxOutOfOrderEvals removed from initializer list
+      // kMaxOutOfOrderEvals calculation moved inside constructor body below
       kNpsLimit(options.Get<float>(kNpsLimitId)),
       kSolidTreeThreshold(options.Get<int>(kSolidTreeThresholdId)), // Added init
       kTaskWorkersPerSearchWorker(
@@ -726,15 +730,14 @@ SearchParams::SearchParams(const OptionsDict& options)
       // --- Root Beam Search ADDED ---
       kRootBeamWidth(options.Get<int>(kRootBeamWidthId)),
       kRootBeamUpdateThreshold(options.Get<int>(kRootBeamUpdateThresholdId)),
-      kRootBeamUpdateInterval(options.Get<int>(kRootBeamUpdateIntervalId))
+      kRootBeamUpdateInterval(options.Get<int>(kRootBeamUpdateIntervalId)),
       // --- END Root Beam Search ADDED ---
       // Removed initializers for features not present in the corrected params.h
+      kMaxOutOfOrderEvals(std::max( // Calculation now inside constructor body
+          1, static_cast<int>(kMaxOutOfOrderEvalsFactor *
+                              (kMiniBatchSize > 0 ? kMiniBatchSize : DEFAULT_MAX_PREFETCH))))
        { // Start of constructor body
-           // Calculate kMaxOutOfOrderEvals here *if needed as a non-const member*
-           // Otherwise, just use kMaxOutOfOrderEvalsFactor where needed.
-           // Example if you ADDED a non-const member `max_ooo_evals_` to SearchParams:
-           // const int effective_batch_size = (kMiniBatchSize > 0) ? kMiniBatchSize : DEFAULT_MAX_PREFETCH; // Use default if minibatch is 0
-           // max_ooo_evals_ = std::max(1, static_cast<int>(kMaxOutOfOrderEvalsFactor * effective_batch_size));
+           // (kMaxOutOfOrderEvals calculation moved here)
        } // End of constructor body
 
 } // namespace classic
