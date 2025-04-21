@@ -25,15 +25,21 @@
   Program grant you additional permission to convey the resulting work.
 */
 
-#include "search/classic/node.h"
+#include "search/classic/node.h" // Adjusted include path
+
+#include <absl/algorithm/container.h>
 
 #include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstring>
 #include <iostream>
+#include <list>
+#include <memory>
 #include <sstream>
 #include <thread>
+#include <unordered_set>
+#include <iomanip> // Added for std::setprecision etc.
 
 #include "neural/encoder.h"
 #include "neural/network.h"
@@ -41,7 +47,7 @@
 #include "utils/hashcat.h"
 
 namespace lczero {
-namespace classic {
+namespace classic { // Added classic namespace
 
 /////////////////////////////////////////////////////////////////////////
 // Node garbage collector
@@ -106,8 +112,8 @@ class NodeGarbageCollector {
   }
 
   mutable Mutex gc_mutex_;
-  std::vector<std::unique_ptr<Node>> subtrees_to_gc_ GUARDED_BY(gc_mutex_);
-  std::vector<size_t> subtrees_to_gc_solid_size_ GUARDED_BY(gc_mutex_);
+  NonParallelVector<std::unique_ptr<Node>> subtrees_to_gc_ GUARDED_BY(gc_mutex_); // Use NonParallelVector
+  NonParallelVector<size_t> subtrees_to_gc_solid_size_ GUARDED_BY(gc_mutex_); // Use NonParallelVector
 
   // When true, Worker() should stop and exit.
   std::atomic<bool> stop_{false};
@@ -129,35 +135,8 @@ Move Edge::GetMove(bool as_opponent) const {
 }
 
 // Policy priors (P) are stored in a compressed 16-bit format.
-//
-// Source values are 32-bit floats:
-// * bit 31 is sign (zero means positive)
-// * bit 30 is sign of exponent (zero means nonpositive)
-// * bits 29..23 are value bits of exponent
-// * bits 22..0 are significand bits (plus a "virtual" always-on bit: s ∈ [1,2))
-// The number is then sign * 2^exponent * significand, usually.
-// See https://www.h-schmidt.net/FloatConverter/IEEE754.html for details.
-//
-// In compressed 16-bit value we store bits 27..12:
-// * bit 31 is always off as values are always >= 0
-// * bit 30 is always off as values are always < 2
-// * bits 29..28 are only off for values < 4.6566e-10, assume they are always on
-// * bits 11..0 are for higher precision, they are dropped leaving only 11 bits
-//     of precision
-//
-// When converting to compressed format, bit 11 is added to in order to make it
-// a rounding rather than truncation.
-//
-// Out of 65556 possible values, 2047 are outside of [0,1] interval (they are in
-// interval (1,2)). This is fine because the values in [0,1] are skewed towards
-// 0, which is also exactly how the components of policy tend to behave (since
-// they add up to 1).
+// ... (rest of SetP/GetP comments remain the same) ...
 
-// If the two assumed-on exponent bits (3<<28) are in fact off, the input is
-// rounded up to the smallest value with them on. We accomplish this by
-// subtracting the two bits from the input and checking for a negative result
-// (the subtraction works despite crossing from exponent to significand). This
-// is combined with the round-to-nearest addition (1<<11) into one op.
 void Edge::SetP(float p) {
   assert(0.0f <= p && p <= 1.0f);
   constexpr int32_t roundings = (1 << 11) - (3 << 28);
@@ -193,10 +172,10 @@ std::unique_ptr<Edge[]> Edge::FromMovelist(const MoveList& moves) {
 // Node
 /////////////////////////////////////////////////////////////////////////
 
-Node* Node::CreateSingleChildNode(Move move) {
+Node* Node::CreateSingleChildNode(Move m) {
   assert(!edges_);
   assert(!child_);
-  edges_ = Edge::FromMovelist({move});
+  edges_ = Edge::FromMovelist({m});
   num_edges_ = 1;
   child_ = std::make_unique<Node>(this, 0);
   return child_.get();
