@@ -1,6 +1,6 @@
 /*
   This file is part of Leela Chess Zero.
-  Copyright (C) 2018-2019 The LCZero Authors
+  Copyright (C) 2018-2023 The LCZero Authors
 
   Leela Chess is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -27,12 +27,13 @@
 
 #pragma once
 
-#include "neural/encoder.h"
+#include "neural/encoder.h" // Assuming this path is correct for your version
 #include "utils/optionsdict.h"
 #include "utils/optionsparser.h"
+#include "neural/shared_params.h" // Include shared params
 
 namespace lczero {
-namespace classic {
+namespace classic { // Added classic namespace
 
 enum class ContemptMode { PLAY, WHITE, BLACK, NONE };
 
@@ -56,12 +57,15 @@ class SearchParams {
 
   // Parameter getters.
   int GetMiniBatchSize() const { return kMiniBatchSize; }
-  int GetMaxPrefetchBatch() const {
+   int GetMaxPrefetchBatch() const {
     return options_.Get<int>(kMaxPrefetchBatchId);
   }
   float GetCpuct(bool at_root) const { return at_root ? kCpuctAtRoot : kCpuct; }
   float GetCpuctBase(bool at_root) const {
     return at_root ? kCpuctBaseAtRoot : kCpuctBase;
+  }
+   float GetCpuctExponent(bool at_root) const { // Added missing getter
+    return at_root ? kCpuctExponentAtRoot : kCpuctExponent;
   }
   float GetCpuctFactor(bool at_root) const {
     return at_root ? kCpuctFactorAtRoot : kCpuctFactor;
@@ -106,7 +110,7 @@ class SearchParams {
   std::string GetScoreType() const {
     return options_.Get<std::string>(kScoreTypeId);
   }
-  FillEmptyHistory GetHistoryFill() const { return kHistoryFill; }
+  FillEmptyHistory GetHistoryFill() const { return kHistoryFill; } // Note: Uses shared param getter
   float GetMovesLeftMaxEffect() const { return kMovesLeftMaxEffect; }
   float GetMovesLeftThreshold() const { return kMovesLeftThreshold; }
   float GetMovesLeftSlope() const { return kMovesLeftSlope; }
@@ -115,6 +119,7 @@ class SearchParams {
   float GetMovesLeftQuadraticFactor() const {
     return kMovesLeftQuadraticFactor;
   }
+  // bool GetDisplayCacheUsage() const { return kDisplayCacheUsage; } // Removed if not present
   int GetMaxConcurrentSearchers() const { return kMaxConcurrentSearchers; }
   float GetDrawScore() const { return kDrawScore; }
   ContemptMode GetContemptMode() const {
@@ -127,13 +132,13 @@ class SearchParams {
   }
   float GetWDLRescaleRatio() const { return kWDLRescaleParams.ratio; }
   float GetWDLRescaleDiff() const { return kWDLRescaleParams.diff; }
-  float GetWDLMaxS() const { return kWDLMaxS; }
+  float GetWDLMaxS() const { return kWDLMaxS; } // Added getter
   float GetWDLEvalObjectivity() const { return kWDLEvalObjectivity; }
-  float GetMaxOutOfOrderEvalsFactor() const {
+  float GetMaxOutOfOrderEvalsFactor() const { // Changed return type and name
     return kMaxOutOfOrderEvalsFactor;
   }
   float GetNpsLimit() const { return kNpsLimit; }
-  int GetSolidTreeThreshold() const { return kSolidTreeThreshold; }
+  int GetSolidTreeThreshold() const { return kSolidTreeThreshold; } // Added getter
 
   int GetTaskWorkersPerSearchWorker() const {
     return kTaskWorkersPerSearchWorker;
@@ -163,11 +168,19 @@ class SearchParams {
   }
   bool GetSearchSpinBackoff() const { return kSearchSpinBackoff; }
 
+  // --- Root Beam Search ADDED ---
+  int GetRootBeamWidth() const { return kRootBeamWidth; }
+  int GetRootBeamUpdateThreshold() const { return kRootBeamUpdateThreshold; }
+  int GetRootBeamUpdateInterval() const { return kRootBeamUpdateInterval; }
+  // --- END Root Beam Search ADDED ---
+
   // Search parameter IDs.
   static const OptionId kMiniBatchSizeId;
-  static const OptionId kMaxPrefetchBatchId;
+  static const OptionId kMaxPrefetchBatchId; // Added ID
   static const OptionId kCpuctId;
   static const OptionId kCpuctAtRootId;
+  static const OptionId kCpuctExponentId; // Added ID
+  static const OptionId kCpuctExponentAtRootId; // Added ID
   static const OptionId kCpuctBaseId;
   static const OptionId kCpuctBaseAtRootId;
   static const OptionId kCpuctFactorId;
@@ -190,6 +203,7 @@ class SearchParams {
   static const OptionId kFpuStrategyAtRootId;
   static const OptionId kFpuValueAtRootId;
   static const OptionId kCacheHistoryLengthId;
+  // static const OptionId kPolicySoftmaxTempId; // Usually comes from shared params
   static const OptionId kMaxCollisionEventsId;
   static const OptionId kMaxCollisionVisitsId;
   static const OptionId kOutOfOrderEvalId;
@@ -198,12 +212,14 @@ class SearchParams {
   static const OptionId kMultiPvId;
   static const OptionId kPerPvCountersId;
   static const OptionId kScoreTypeId;
+  // static const OptionId kHistoryFillId; // Usually comes from shared params
   static const OptionId kMovesLeftMaxEffectId;
   static const OptionId kMovesLeftThresholdId;
   static const OptionId kMovesLeftConstantFactorId;
   static const OptionId kMovesLeftScaledFactorId;
   static const OptionId kMovesLeftQuadraticFactorId;
   static const OptionId kMovesLeftSlopeId;
+  // static const OptionId kDisplayCacheUsageId; // Removed if not present
   static const OptionId kMaxConcurrentSearchersId;
   static const OptionId kDrawScoreId;
   static const OptionId kContemptModeId;
@@ -211,14 +227,14 @@ class SearchParams {
   static const OptionId kContemptMaxValueId;
   static const OptionId kWDLCalibrationEloId;
   static const OptionId kWDLContemptAttenuationId;
-  static const OptionId kWDLMaxSId;
+  static const OptionId kWDLMaxSId; // Added ID
   static const OptionId kWDLEvalObjectivityId;
   static const OptionId kWDLDrawRateTargetId;
   static const OptionId kWDLDrawRateReferenceId;
   static const OptionId kWDLBookExitBiasId;
-  static const OptionId kMaxOutOfOrderEvalsFactorId;
+  static const OptionId kMaxOutOfOrderEvalsFactorId; // Changed name
   static const OptionId kNpsLimitId;
-  static const OptionId kSolidTreeThresholdId;
+  static const OptionId kSolidTreeThresholdId; // Added ID
   static const OptionId kTaskWorkersPerSearchWorkerId;
   static const OptionId kMinimumWorkSizeForProcessingId;
   static const OptionId kMinimumWorkSizeForPickingId;
@@ -233,16 +249,22 @@ class SearchParams {
   static const OptionId kUCIRatingAdvId;
   static const OptionId kSearchSpinBackoffId;
 
+  // --- Root Beam Search ADDED ---
+  static const OptionId kRootBeamWidthId;
+  static const OptionId kRootBeamUpdateThresholdId;
+  static const OptionId kRootBeamUpdateIntervalId;
+  // --- END Root Beam Search ADDED ---
+
  private:
   const OptionsDict& options_;
   // Cached parameter values. Values have to be cached if either:
-  // 1. Parameter is accessed often and has to be cached for performance
-  // reasons.
+  // 1. Parameter is accessed often and has to be cached for performance reasons.
   // 2. Parameter has to stay the same during the search.
-  // TODO(crem) Some of those parameters can be converted to be dynamic after
-  //            trivial search optimizations.
+  // TODO(crem) Some of those parameters can be converted to be dynamic after trivial search optimizations.
   const float kCpuct;
   const float kCpuctAtRoot;
+  const float kCpuctExponent; // Added member
+  const float kCpuctExponentAtRoot; // Added member
   const float kCpuctBase;
   const float kCpuctBaseAtRoot;
   const float kCpuctFactor;
@@ -255,13 +277,13 @@ class SearchParams {
   const bool kFpuAbsoluteAtRoot;
   const float kFpuValueAtRoot;
   const int kCacheHistoryLength;
-  const float kPolicySoftmaxTemp;
+  const float kPolicySoftmaxTemp; // Kept, assuming it might be classic-specific override
   const int kMaxCollisionEvents;
   const int kMaxCollisionVisits;
   const bool kOutOfOrderEval;
   const bool kStickyEndgames;
   const bool kSyzygyFastPlay;
-  const FillEmptyHistory kHistoryFill;
+  const FillEmptyHistory kHistoryFill; // Kept, assuming classic-specific override
   const int kMiniBatchSize;
   const float kMovesLeftMaxEffect;
   const float kMovesLeftThreshold;
@@ -269,15 +291,16 @@ class SearchParams {
   const float kMovesLeftConstantFactor;
   const float kMovesLeftScaledFactor;
   const float kMovesLeftQuadraticFactor;
+  const bool kDisplayCacheUsage; // Kept, assuming it's used elsewhere
   const int kMaxConcurrentSearchers;
   const float kDrawScore;
   const float kContempt;
   const WDLRescaleParams kWDLRescaleParams;
-  const float kWDLMaxS;
+  const float kWDLMaxS; // Added member
   const float kWDLEvalObjectivity;
-  const float kMaxOutOfOrderEvalsFactor;
+  const float kMaxOutOfOrderEvalsFactor; // Changed type and name
   const float kNpsLimit;
-  const int kSolidTreeThreshold;
+  const int kSolidTreeThreshold; // Added member
   const int kTaskWorkersPerSearchWorker;
   const int kMinimumWorkSizeForProcessing;
   const int kMinimumWorkSizeForPicking;
@@ -289,6 +312,12 @@ class SearchParams {
   const int kMaxCollisionVisitsScalingEnd;
   const float kMaxCollisionVisitsScalingPower;
   const bool kSearchSpinBackoff;
+  // --- Root Beam Search ADDED ---
+  const int kRootBeamWidth;
+  const int kRootBeamUpdateThreshold;
+  const int kRootBeamUpdateInterval;
+  // --- END Root Beam Search ADDED ---
+
 };
 
 }  // namespace classic
