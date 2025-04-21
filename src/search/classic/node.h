@@ -1,20 +1,41 @@
 /*
   This file is part of Leela Chess Zero.
   Copyright (C) 2018-2023 The LCZero Authors
-  ... (License header remains the same) ...
+
+  Leela Chess is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  Leela Chess is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with Leela Chess.  If not, see <http://www.gnu.org/licenses/>.
+
+  Additional permission under GNU GPL version 3 section 7
+
+  If you modify this Program, or any covered work, by linking or
+  combining it with NVIDIA Corporation's libraries from the NVIDIA CUDA
+  Toolkit and the NVIDIA CUDA Deep Neural Network library (or a
+  modified version of those libraries), containing parts covered by the
+  terms of the respective license agreement, the licensors of this
+  Program grant you additional permission to convey the resulting work.
 */
 
-#pragma once
+#pragma once // <<< Include guard
 
 #include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <iostream>
-#include <limits>
+#include <limits> // Added for numeric_limits
 #include <memory>
 #include <mutex>
-#include <utility>
-#include <vector>
+#include <utility> // Added for std::pair
+#include <vector>  // Added for std::vector
 
 // Corrected Includes (Using chess/ prefix)
 #include "chess/board.h"     // <<< Reverted path
@@ -23,11 +44,11 @@
 #include "chess/gamestate.h" // <<< Reverted path
 #include "chess/position.h" // <<< Reverted path
 #include "neural/encoder.h"
-#include "proto/net.pb.h"
+#include "proto/net.pb.h" // Contains EvalResult definition
 #include "utils/mutex.h"
 
-namespace lczero {
-namespace classic {
+namespace lczero { // <<< Opening namespace
+namespace classic { // <<< Opening namespace
 
 // Forward declarations
 class SearchParams;
@@ -35,6 +56,7 @@ class Node;
 class EdgeAndNode;
 template <bool is_const> class Edge_Iterator;
 template <bool is_const> class VisitedNode_Iterator;
+
 
 class Edge {
  public:
@@ -160,20 +182,21 @@ class Node {
   Node* parent_ = nullptr;
   std::unique_ptr<Node> child_;
   std::unique_ptr<Node> sibling_;
-  std::atomic<double> wl_{0.0};
+  std::atomic<double> wl_{0.0}; // WDL value (W-L), perspective of player *to move*
 
-  std::atomic<float> d_{0.0};
-  std::atomic<float> m_{0.0};
-  std::atomic<uint32_t> n_{0};
-  std::atomic<uint32_t> n_in_flight_{0};
+  std::atomic<float> d_{0.0};  // Draw probability
+  std::atomic<float> m_{0.0};  // Moves left estimate
+  std::atomic<uint32_t> n_{0}; // Completed visits
+  std::atomic<uint32_t> n_in_flight_{0}; // Visits in progress (virtual loss)
 
-  uint16_t index_;
+  uint16_t index_; // Index in parent's edge list
 
-  uint8_t num_edges_ = 0;
+  uint8_t num_edges_ = 0; // Number of edges/children
   Terminal terminal_type_ : 2;
   GameResult lower_bound_ : 2;
   GameResult upper_bound_ : 2;
   bool solid_children_ : 1;
+  // is_known_win/loss flags declared above with other atomics
 
   // Friend declarations
   friend class NodeTree;
@@ -232,22 +255,22 @@ class Edge_Iterator : public EdgeAndNode {
   using pointer = Edge_Iterator*;
   using reference = Edge_Iterator&;
 
-  Edge_Iterator();
-  Edge_Iterator(NodePtr parent_node);
+  Edge_Iterator(); // Default constructor for end()
+  Edge_Iterator(NodePtr parent_node); // Simplified constructor for begin()
 
   Edge_Iterator<is_const> begin();
   Edge_Iterator<is_const> end();
   void operator++();
   Edge_Iterator& operator*();
-  Node* GetOrSpawnNode(Node* parent);
+  Node* GetOrSpawnNode(Node* parent); // Parent might be redundant
 
  private:
   void Actualize();
 
   NodePtr parent_node_ = nullptr;
-  Ptr node_ptr_ = nullptr;
-  uint16_t current_idx_ = 0;
-  uint16_t total_count_ = 0;
+  Ptr node_ptr_ = nullptr; // Pointer to sibling pointer (linked list mode)
+  uint16_t current_idx_ = 0; // Current edge index
+  uint16_t total_count_ = 0; // Total edges for parent
 };
 
 // --- VisitedNode_Iterator ---
@@ -256,22 +279,22 @@ class VisitedNode_Iterator {
  public:
   using NodePtr = std::conditional_t<is_const, const Node*, Node*>;
 
-  VisitedNode_Iterator();
-  VisitedNode_Iterator(NodePtr parent_node);
+  VisitedNode_Iterator(); // Default constructor for end()
+  VisitedNode_Iterator(NodePtr parent_node); // Constructor for begin()
 
   bool operator==(const VisitedNode_Iterator<is_const>& other) const;
   bool operator!=(const VisitedNode_Iterator<is_const>& other) const { return !(*this == other); }
   VisitedNode_Iterator<is_const> begin();
   VisitedNode_Iterator<is_const> end();
   void operator++();
-  Node* operator*();
+  Node* operator*(); // Returns Node*
 
  private:
    NodePtr parent_node_ = nullptr;
    bool solid_ = false;
    uint16_t total_count_ = 0;
-   Node* node_ptr_ = nullptr;
-   uint16_t current_idx_ = 0;
+   Node* node_ptr_ = nullptr; // Ptr to current node (or array start in solid)
+   uint16_t current_idx_ = 0; // Index used primarily for solid mode
 };
 
 // Inline definitions for begin()/end() and simple accessors
@@ -314,5 +337,5 @@ class NodeTree {
   PositionHistory history_;
 };
 
-}  // namespace classic
-}  // namespace lczero
+}  // namespace classic <<< Closing namespace
+}  // namespace lczero <<< Closing namespace
