@@ -15,7 +15,7 @@
 #include <thread>
 
 // Corrected Includes (NO prefix - Based on build flags and repo structure)
-#include "callbacks.h" // <<< Final Path Correction
+#include "chess/callbacks.h" // <<< Final Path Correction
 #include "chess.h"     // <<< Final Path Correction
 #include "position.h" // <<< Final Path Correction
 #include "uciloop.h"   // <<< Final Path Correction
