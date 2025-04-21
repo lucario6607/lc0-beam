@@ -17,7 +17,7 @@
 #include <utility>
 
 // Corrected Includes (Using chess/ prefix consistently)
-#include "chess/callbacks.h" // Defines ThinkingInfo, IterationStats, StoppersHints (in lczero:: namespace)
+#include "chess/callbacks.h" // Defines ThinkingInfo, IterationStats, StoppersHints (likely in lczero namespace)
 #include "chess/types.h"     // <<< Defines lczero::Value, lczero::Move, lczero::Eval etc.
 #include "chess/position.h" // <<< Defines lczero::PositionHash, lczero::Position
 #include "chess/uciloop.h"   // <<< Defines lczero::UciResponder
@@ -49,7 +49,7 @@ class Search {
  public:
   Search(const NodeTree& tree, lczero::Backend* network, // Use lczero::
          std::unique_ptr<lczero::UciResponder> uci_responder, // Use lczero::
-         const lczero::MoveList& searchmoves, // Use lczero::
+         const lczero::MoveList& searchmoves, // <<< Use lczero::
          std::chrono::steady_clock::time_point start_time,
          std::unique_ptr<SearchStopper> stopper, bool infinite, bool ponder, // <<< Use UNQUALIFIED SearchStopper
          const lczero::OptionsDict& options, lczero::SyzygyTablebase* syzygy_tb); // Use lczero::
@@ -63,7 +63,7 @@ class Search {
   void Wait();
   bool IsSearchActive() const;
 
-  std::pair<lczero::Move, lczero::Move> GetBestMove(); // Use lczero::
+  std::pair<lczero::Move, lczero::Move> GetBestMove(); // <<< Use lczero::
   lczero::Eval GetBestEval(lczero::Move* move = nullptr, bool* is_terminal = nullptr) const; // <<< Use lczero::
   std::int64_t GetTotalPlayouts() const;
   const SearchParams& GetParams() const { return params_; }
@@ -238,7 +238,7 @@ class SearchWorker {
   bool AddNodeToComputation(Node* node);
   int PrefetchIntoCache(Node* node, int budget, bool is_odd_depth);
   void DoBackupUpdateSingleNode(const NodeToProcess& node_to_process);
-  bool MaybeSetBounds(Node* p, float m, int* n_to_fix, lczero::Value* v_delta, // <<< Use lczero::
+  bool MaybeSetBounds(Node* p, float m, int* n_to_fix, lczero::Value* v_delta, // <<< Use lczero::Value*
                       float* d_delta, float* m_delta);
   void PickNodesToExtend(int collision_limit);
   void PickNodesToExtendTask(Node* starting_point, int base_depth,
