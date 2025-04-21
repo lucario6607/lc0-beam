@@ -16,12 +16,12 @@
 #include <utility>
 #include <vector>
 
-// Corrected Includes (Using chess/ prefix consistently)
-#include "chess/board.h"     // <<< Added prefix
-#include "chess/callbacks.h" // <<< Added prefix
-#include "chess/chess.h"     // <<< Added prefix
-#include "chess/gamestate.h" // <<< Added prefix
-#include "chess/position.h" // <<< Added prefix
+// Corrected Includes (NO chess/ prefix)
+#include "board.h"     // <<< Removed prefix
+#include "callbacks.h" // <<< Removed prefix
+#include "chess.h"     // <<< Removed prefix - CRUCIAL
+#include "gamestate.h" // <<< Removed prefix
+#include "position.h" // <<< Removed prefix - CRUCIAL
 #include "neural/encoder.h"
 #include "proto/net.pb.h"
 #include "utils/mutex.h"
@@ -35,6 +35,7 @@ class Node;
 class EdgeAndNode;
 template <bool is_const> class Edge_Iterator;
 template <bool is_const> class VisitedNode_Iterator;
+
 
 class Edge {
  public:
@@ -312,3 +313,4 @@ class NodeTree {
 
 }  // namespace classic
 }  // namespace lczero
+
