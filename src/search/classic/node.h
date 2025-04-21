@@ -16,18 +16,15 @@
 #include <utility>
 #include <vector>
 
-// Corrected Includes (NO prefix - Based on repo structure and build flags)
-#include "board.h"
-#include "chess/callbacks.h"
-#include "chess.h"
-#include "gamestate.h"
-#include "position.h"
-#include "neural/encoder.h" // neural is likely a subdirectory
-#include "proto/net.pb.h"   // proto is likely a subdirectory or generated path
-#include "utils/mutex.h"    // utils is likely a subdirectory
-
-// --- The rest of node.h remains exactly as the previous correct version ---
-// (Includes class Edge, class Node, class EdgeAndNode, Iterator templates, NodeTree)
+// Corrected Includes (Using chess/ prefix and types.h)
+#include "chess/board.h"     // <<< Using chess/ prefix
+#include "chess/callbacks.h" // <<< Using chess/ prefix
+#include "chess/types.h"     // <<< CORRECTED: Was chess.h
+#include "chess/gamestate.h" // <<< Using chess/ prefix
+#include "chess/position.h" // <<< Using chess/ prefix
+#include "neural/encoder.h"
+#include "proto/net.pb.h"
+#include "utils/mutex.h"
 
 namespace lczero {
 namespace classic {
