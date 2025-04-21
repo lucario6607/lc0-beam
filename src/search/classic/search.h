@@ -14,14 +14,14 @@
 #include <shared_mutex>
 #include <thread>
 
-// Corrected Includes (Using chess/ prefix consistently)
-#include "chess/callbacks.h" // <<< Added prefix
-#include "chess/chess.h"     // <<< Added prefix
-#include "chess/position.h" // <<< Added prefix
-#include "chess/uciloop.h"   // <<< Added prefix
-#include "chess/gamestate.h" // <<< Added prefix (for PositionHistory)
+// Corrected Includes (NO chess/ prefix)
+#include "callbacks.h" // <<< Removed prefix
+#include "chess.h"     // <<< Removed prefix - CRUCIAL
+#include "position.h" // <<< Removed prefix - CRUCIAL
+#include "uciloop.h"   // <<< Removed prefix
+#include "gamestate.h" // <<< Removed prefix - For PositionHistory
 #include "neural/backend.h"
-#include "search/classic/node.h" // Includes node.h (which itself includes chess/* files)
+#include "search/classic/node.h" // Includes the corrected node.h
 #include "search/classic/params.h"
 #include "search/classic/stoppers/timemgr.h"
 #include "syzygy/syzygy.h" // Path may vary
