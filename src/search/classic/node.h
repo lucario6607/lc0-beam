@@ -16,14 +16,14 @@
 #include <utility>
 #include <vector>
 
-// Corrected Includes (assuming files are directly in src/ or relative path works)
-#include "board.h"     // Contains MoveList
-#include "callbacks.h" // Contains ThinkingInfo etc. (Needed indirectly?)
-#include "chess.h"     // <<< CORRECTED PATH: Defines Value, GameResult, kValueMate, Move etc.
-#include "gamestate.h" // Contains PositionHistory
-#include "position.h" // <<< CORRECTED PATH: Defines PositionHash (likely)
+// Corrected Includes (Using chess/ prefix)
+#include "chess/board.h"     // <<< Reverted path
+#include "chess/callbacks.h" // <<< Reverted path
+#include "chess/chess.h"     // <<< Reverted path
+#include "chess/gamestate.h" // <<< Reverted path
+#include "chess/position.h" // <<< Reverted path
 #include "neural/encoder.h"
-#include "proto/net.pb.h" // Contains EvalResult definition
+#include "proto/net.pb.h"
 #include "utils/mutex.h"
 
 namespace lczero {
@@ -35,7 +35,6 @@ class Node;
 class EdgeAndNode;
 template <bool is_const> class Edge_Iterator;
 template <bool is_const> class VisitedNode_Iterator;
-
 
 class Edge {
  public:
@@ -52,7 +51,6 @@ class Edge {
   friend class Edge_Iterator<true>;
   friend class Edge_Iterator<false>;
 };
-
 
 class Node {
  public:
@@ -162,21 +160,20 @@ class Node {
   Node* parent_ = nullptr;
   std::unique_ptr<Node> child_;
   std::unique_ptr<Node> sibling_;
-  std::atomic<double> wl_{0.0}; // WDL value (W-L), perspective of player *to move*
+  std::atomic<double> wl_{0.0};
 
-  std::atomic<float> d_{0.0};  // Draw probability
-  std::atomic<float> m_{0.0};  // Moves left estimate
-  std::atomic<uint32_t> n_{0}; // Completed visits
-  std::atomic<uint32_t> n_in_flight_{0}; // Visits in progress (virtual loss)
+  std::atomic<float> d_{0.0};
+  std::atomic<float> m_{0.0};
+  std::atomic<uint32_t> n_{0};
+  std::atomic<uint32_t> n_in_flight_{0};
 
-  uint16_t index_; // Index in parent's edge list
+  uint16_t index_;
 
-  uint8_t num_edges_ = 0; // Number of edges/children
+  uint8_t num_edges_ = 0;
   Terminal terminal_type_ : 2;
   GameResult lower_bound_ : 2;
   GameResult upper_bound_ : 2;
   bool solid_children_ : 1;
-  // is_known_win/loss flags declared above with other atomics
 
   // Friend declarations
   friend class NodeTree;
@@ -235,22 +232,22 @@ class Edge_Iterator : public EdgeAndNode {
   using pointer = Edge_Iterator*;
   using reference = Edge_Iterator&;
 
-  Edge_Iterator(); // Default constructor for end()
-  Edge_Iterator(NodePtr parent_node); // Simplified constructor for begin()
+  Edge_Iterator();
+  Edge_Iterator(NodePtr parent_node);
 
   Edge_Iterator<is_const> begin();
   Edge_Iterator<is_const> end();
   void operator++();
   Edge_Iterator& operator*();
-  Node* GetOrSpawnNode(Node* parent); // Parent might be redundant
+  Node* GetOrSpawnNode(Node* parent);
 
  private:
   void Actualize();
 
   NodePtr parent_node_ = nullptr;
-  Ptr node_ptr_ = nullptr; // Pointer to sibling pointer (linked list mode)
-  uint16_t current_idx_ = 0; // Current edge index
-  uint16_t total_count_ = 0; // Total edges for parent
+  Ptr node_ptr_ = nullptr;
+  uint16_t current_idx_ = 0;
+  uint16_t total_count_ = 0;
 };
 
 // --- VisitedNode_Iterator ---
@@ -259,22 +256,22 @@ class VisitedNode_Iterator {
  public:
   using NodePtr = std::conditional_t<is_const, const Node*, Node*>;
 
-  VisitedNode_Iterator(); // Default constructor for end()
-  VisitedNode_Iterator(NodePtr parent_node); // Constructor for begin()
+  VisitedNode_Iterator();
+  VisitedNode_Iterator(NodePtr parent_node);
 
   bool operator==(const VisitedNode_Iterator<is_const>& other) const;
   bool operator!=(const VisitedNode_Iterator<is_const>& other) const { return !(*this == other); }
   VisitedNode_Iterator<is_const> begin();
   VisitedNode_Iterator<is_const> end();
   void operator++();
-  Node* operator*(); // Returns Node*
+  Node* operator*();
 
  private:
    NodePtr parent_node_ = nullptr;
    bool solid_ = false;
    uint16_t total_count_ = 0;
-   Node* node_ptr_ = nullptr; // Ptr to current node (or array start in solid)
-   uint16_t current_idx_ = 0; // Index used primarily for solid mode
+   Node* node_ptr_ = nullptr;
+   uint16_t current_idx_ = 0;
 };
 
 // Inline definitions for begin()/end() and simple accessors
