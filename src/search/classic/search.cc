@@ -1723,8 +1723,6 @@ void SearchWorker::PickNodesToExtendTask(
 
   Node::Iterator best_edge;
   Node::Iterator second_best_edge;
-  // Fetch the current best root node visits for possible smart pruning.
-  // const int64_t best_node_n = search_->current_best_edge_.GetN(); // Removed unused variable
 
   int passed_off = 0;
   int completed_visits = 0;
@@ -1869,7 +1867,7 @@ void SearchWorker::PickNodesToExtendTask(
 
                 if (current_score[allowed_idx] < -1.0f) {
                      float p = current_pol[allowed_idx];
-                     // No policy boosting logic here
+                     // Policy boosting logic removed as it wasn't present in this file version
                      current_score[allowed_idx] = p * puct_mult / (1 + nstarted) + util;
                 }
 
@@ -1906,7 +1904,7 @@ void SearchWorker::PickNodesToExtendTask(
                 const float util = current_util[idx]; // Calculate util before potential boosting
                 if (idx > cache_filled_idx) {
                    float p = current_pol[idx];
-                   // No policy boosting logic
+                   // Policy boosting logic removed
                    current_score[idx] = p * puct_mult / (1 + nstarted) + util;
                    cache_filled_idx++;
                 }
@@ -2580,4 +2578,3 @@ void SearchWorker::UpdateCounters() {
 
 }  // namespace classic
 }  // namespace lczero
-// --- END OF FILE mcts/search.cc ---
