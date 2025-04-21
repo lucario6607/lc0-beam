@@ -1865,11 +1865,11 @@ void SearchWorker::PickNodesToExtendTask(
                 }
 
                 int nstarted = current_nstarted[allowed_idx];
-                const float util = current_util[allowed_idx]; // Calculate util *before* policy boosting check
+                const float util = current_util[allowed_idx]; // Calculate util before potential boosting
 
                 if (current_score[allowed_idx] < -1.0f) {
                      float p = current_pol[allowed_idx];
-                     // Policy boosting logic removed as it wasn't present in this file version
+                     // No policy boosting logic here
                      current_score[allowed_idx] = p * puct_mult / (1 + nstarted) + util;
                 }
 
@@ -1903,10 +1903,10 @@ void SearchWorker::PickNodesToExtendTask(
                    current_nstarted[idx] = cur_iters[idx].GetNStarted();
                 }
                 int nstarted = current_nstarted[idx];
-                const float util = current_util[idx]; // Calculate util *before* policy boosting check
+                const float util = current_util[idx]; // Calculate util before potential boosting
                 if (idx > cache_filled_idx) {
                    float p = current_pol[idx];
-                   // Policy boosting logic removed
+                   // No policy boosting logic
                    current_score[idx] = p * puct_mult / (1 + nstarted) + util;
                    cache_filled_idx++;
                 }
