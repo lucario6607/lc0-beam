@@ -16,10 +16,10 @@
 #include <utility>
 #include <vector>
 
-// Corrected Includes (Using chess/ prefix and types.h)
-#include "chess/board.h"     // For MoveList
+// Corrected Includes (Using chess/ prefix)
+#include "chess/board.h"     // For MoveList definition
 #include "chess/callbacks.h" // Needed indirectly? Keep for safety.
-#include "chess/types.h"     // <<< CORRECT HEADER for Value, GameResult, kValueMate, Move etc.
+#include "chess/types.h"     // <<< Defines lczero::Value, lczero::GameResult, lczero::kValueMate, lczero::Move etc.
 #include "chess/gamestate.h" // For PositionHistory
 #include "chess/position.h" // For PositionHash and GameResult? (Confirm GameResult source)
 #include "neural/encoder.h"
@@ -67,8 +67,8 @@ class Node {
   Node(const Node&) = delete;
   Node& operator=(const Node&) = delete;
 
-  Node* CreateSingleChildNode(lczero::Move m);
-  void CreateEdges(const lczero::MoveList& moves);
+  Node* CreateSingleChildNode(lczero::Move m); // Use lczero::
+  void CreateEdges(const lczero::MoveList& moves); // Use lczero::
   Node* GetParent() const { return parent_; }
   bool HasChildren() const { return static_cast<bool>(edges_); }
   float GetVisitedPolicy() const;
