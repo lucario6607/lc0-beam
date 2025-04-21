@@ -16,12 +16,12 @@
 #include <utility>
 #include <vector>
 
-// Corrected Includes (Using chess/ prefix)
-#include "chess/chess.h"     // <<< Includes types.h, move.h etc.
-#include "chess/board.h"     // For MoveList definition if not in chess.h
+// Corrected Includes (Using chess/ prefix and types.h)
+#include "chess/board.h"     // For MoveList
+#include "chess/callbacks.h" // Needed indirectly? Keep for safety.
+#include "chess/types.h"     // <<< CORRECT HEADER for Value, GameResult, kValueMate, Move etc.
 #include "chess/gamestate.h" // For PositionHistory
-#include "chess/position.h" // For PositionHash and GameResult?
-#include "chess/callbacks.h" // May define ThinkingInfo/IterationStats etc. in lczero namespace
+#include "chess/position.h" // For PositionHash and GameResult? (Confirm GameResult source)
 #include "neural/encoder.h"
 #include "proto/net.pb.h"   // For EvalResult
 #include "utils/mutex.h"
