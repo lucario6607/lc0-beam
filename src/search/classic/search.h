@@ -9,21 +9,21 @@
 #include <array>
 #include <condition_variable>
 #include <functional>
-#include <limits> // Required for numeric_limits
+#include <limits>
 #include <optional>
 #include <shared_mutex>
 #include <thread>
 
-// Corrected Includes
-#include "callbacks.h" // Contains ThinkingInfo etc.
-#include "chess.h"     // <<< CORRECTED PATH: Defines Value, kValueMate etc.
-#include "position.h" // <<< CORRECTED PATH: Defines PositionHash
-#include "uciloop.h"   // Contains UciResponder
+// Corrected Includes (Using chess/ prefix where appropriate)
+#include "chess/callbacks.h" // <<< Reverted path
+#include "chess/chess.h"     // <<< Reverted path
+#include "chess/position.h" // <<< Reverted path
+#include "chess/uciloop.h"   // <<< Reverted path (Likely needed for UciResponder)
 #include "neural/backend.h"
-#include "search/classic/node.h" // Include the corrected node.h
+#include "search/classic/node.h" // Includes the corrected node.h
 #include "search/classic/params.h"
 #include "search/classic/stoppers/timemgr.h"
-#include "syzygy/syzygy.h" // May need adjustment based on actual location
+#include "syzygy/syzygy.h" // Path may vary depending on Syzygy integration
 #include "utils/logging.h"
 #include "utils/mutex.h"
 
@@ -34,13 +34,13 @@ namespace classic {
 constexpr Value kValueKnownWin = kValueMate;
 constexpr Value kValueKnownLoss = -kValueMate;
 
-// NOTE: TTEntry structure definition would go here or be included if separate
-// Example placeholder:
-struct TTEntry {
-    // ... existing fields like policy_data, value, visits, age, etc. ...
-    bool known_win = false;
-    bool known_loss = false;
-};
+// TTEntry structure placeholder (assuming it's defined elsewhere or implicitly)
+// Example:
+// struct TTEntry {
+//     // ... existing fields like policy_data, value, visits, age, etc. ...
+//     bool known_win = false;
+//     bool known_loss = false;
+// };
 
 
 class Search {
@@ -89,7 +89,7 @@ class Search {
   void CancelSharedCollisions();
   PositionHistory GetPositionHistoryAtNode(const Node* node) const;
 
-  // NOTE: Placeholder for StoreTT declaration
+  // Placeholder for StoreTT declaration
   void StoreTT(PositionHash hash, Node* node); // PositionHash should now be defined
 
 
@@ -143,9 +143,150 @@ class Search {
   friend class SearchWorker;
 };
 
-// Single thread worker... (SearchWorker class remains the same as previous correct version) ...
+// --- SearchWorker class ---
 class SearchWorker {
- // ... (Contents same as previous correct version) ...
+ public:
+  SearchWorker(Search* search, const SearchParams& params); // Constructor Declaration
+  ~SearchWorker(); // Destructor Declaration
+
+  void RunBlocking();
+  void ExecuteOneIteration();
+  void InitializeIteration(std::unique_ptr<BackendComputation> computation);
+  void GatherMinibatch();
+  void CollectCollisions();
+  void MaybePrefetchIntoCache();
+  void RunNNComputation();
+  void FetchMinibatchResults();
+  void DoBackupUpdate();
+  void UpdateCounters();
+
+ private:
+  struct NodeToProcess; // Forward declare inner struct
+  struct TaskWorkspace; // Forward declare inner struct
+  struct PickTask;      // Forward declare inner struct
+
+  // NodeToProcess Definition
+  struct NodeToProcess {
+    bool IsExtendable() const { return node && !is_collision && !node->IsTerminal(); } // Add null check
+    bool IsCollision() const { return is_collision; }
+    bool CanEvalOutOfOrder() const {
+      return node && (is_cache_hit || node->IsTerminal()); // Add null check
+    }
+
+    Node* node;
+    std::unique_ptr<EvalResult> eval; // Use EvalResult from proto
+    int multivisit = 0;
+    int maxvisit = 0;
+    uint16_t depth;
+    bool nn_queried = false;
+    bool is_cache_hit = false;
+    bool is_collision = false;
+    std::vector<Move> moves_to_visit;
+    bool ooo_completed = false;
+
+    static NodeToProcess Collision(Node* node, uint16_t depth,
+                                   int collision_count) {
+      return NodeToProcess(node, depth, true, collision_count, 0);
+    }
+    static NodeToProcess Collision(Node* node, uint16_t depth,
+                                   int collision_count, int max_count) {
+      return NodeToProcess(node, depth, true, collision_count, max_count);
+    }
+    static NodeToProcess Visit(Node* node, uint16_t depth) {
+      return NodeToProcess(node, depth, false, 1, 0);
+    }
+
+   private:
+    NodeToProcess(Node* node, uint16_t depth, bool is_collision, int multivisit,
+                  int max_count)
+        : node(node),
+          eval(std::make_unique<EvalResult>()), // Use EvalResult
+          multivisit(multivisit),
+          maxvisit(max_count),
+          depth(depth),
+          is_collision(is_collision) {}
+  };
+
+  // TaskWorkspace Definition
+  struct TaskWorkspace {
+    std::array<Node::Iterator, 256> cur_iters;
+    std::vector<std::unique_ptr<std::array<int, 256>>> vtp_buffer;
+    std::vector<std::unique_ptr<std::array<int, 256>>> visits_to_perform;
+    std::vector<int> vtp_last_filled;
+    std::vector<int> current_path;
+    std::vector<Move> moves_to_path;
+    PositionHistory history;
+    TaskWorkspace(); // Default constructor declaration
+  };
+
+   // PickTask Definition
+  struct PickTask {
+    enum PickTaskType { kGathering, kProcessing };
+    PickTaskType task_type;
+
+    Node* start;
+    int base_depth;
+    int collision_limit;
+    std::vector<Move> moves_to_base;
+    std::vector<NodeToProcess> results;
+
+    int start_idx;
+    int end_idx;
+
+    bool complete = false;
+
+    PickTask(Node* node, uint16_t depth, const std::vector<Move>& base_moves,
+             int collision_limit); // Constructor declaration
+    PickTask(int start_idx, int end_idx); // Constructor declaration
+  };
+
+
+  bool AddNodeToComputation(Node* node);
+  int PrefetchIntoCache(Node* node, int budget, bool is_odd_depth);
+  void DoBackupUpdateSingleNode(const NodeToProcess& node_to_process);
+  bool MaybeSetBounds(Node* p, float m, int* n_to_fix, Value* v_delta, // Use Value*
+                      float* d_delta, float* m_delta);
+  void PickNodesToExtend(int collision_limit);
+  void PickNodesToExtendTask(Node* starting_point, int base_depth, // Corrected order
+                             int collision_limit,
+                             const std::vector<Move>& moves_to_base,
+                             std::vector<NodeToProcess>* receiver,
+                             TaskWorkspace* workspace);
+  void EnsureNodeTwoFoldCorrectForDepth(Node* node, int depth);
+  void ProcessPickedTask(int batch_start, int batch_end,
+                         TaskWorkspace* workspace);
+  void ExtendNode(Node* node, int depth, const std::vector<Move>& moves_to_add,
+                  PositionHistory* history);
+  void FetchSingleNodeResult(NodeToProcess* node_to_process);
+  void RunTasks(int tid);
+  void ResetTasks();
+  int WaitForTasks();
+
+  Search* const search_;
+  std::vector<NodeToProcess> minibatch_;
+  std::unique_ptr<BackendComputation> computation_;
+  int task_workers_;
+  int target_minibatch_size_;
+  int max_out_of_order_;
+  PositionHistory history_;
+  int number_out_of_order_ = 0;
+  const SearchParams& params_;
+  std::unique_ptr<Node> precached_node_;
+  const bool moves_left_support_;
+  IterationStats iteration_stats_;
+  StoppersHints latest_time_manager_hints_;
+
+  Mutex picking_tasks_mutex_;
+  std::vector<PickTask> picking_tasks_;
+  std::atomic<int> task_count_ = -1;
+  std::atomic<int> task_taking_started_ = 0;
+  std::atomic<int> tasks_taken_ = 0;
+  std::atomic<int> completed_tasks_ = 0;
+  std::condition_variable task_added_;
+  std::vector<std::thread> task_threads_;
+  std::vector<TaskWorkspace> task_workspaces_;
+  TaskWorkspace main_workspace_;
+  bool exiting_ = false;
 };
 
 
