@@ -17,19 +17,19 @@
 #include <utility>
 
 // Corrected Includes (Using chess/ prefix consistently)
-#include "chess/callbacks.h" // For ThinkingInfo, IterationStats, StoppersHints etc.
-#include "chess/types.h"     // <<< Defines Value, Move, Eval, kValueMate etc.
-#include "chess/position.h" // <<< Defines PositionHash, Position
-#include "chess/uciloop.h"   // For UciResponder
-#include "chess/gamestate.h" // For PositionHistory
+#include "chess/callbacks.h" // Defines ThinkingInfo, IterationStats, StoppersHints (likely in lczero:: namespace)
+#include "chess/types.h"     // <<< Defines lczero::Value, lczero::Move, lczero::Eval etc.
+#include "chess/position.h" // <<< Defines lczero::PositionHash, lczero::Position
+#include "chess/uciloop.h"   // <<< Defines lczero::UciResponder
+#include "chess/gamestate.h" // <<< Defines lczero::PositionHistory
 #include "neural/backend.h"
 #include "search/classic/node.h" // Includes node.h (which uses chess/ prefix)
 #include "search/classic/params.h"
-#include "search/classic/stoppers/timemgr.h" // Defines SearchStopper
-#include "syzygy/syzygy.h" // Path may vary, assumed correct
+#include "search/classic/stoppers/timemgr.h" // <<< Defines lczero::classic::SearchStopper
+#include "syzygy/syzygy.h" // Path may vary, defines lczero::SyzygyTablebase?
 #include "utils/logging.h"
 #include "utils/mutex.h"
-#include "utils/optionsdict.h" // For OptionsDict
+#include "utils/optionsdict.h" // Defines lczero::OptionsDict
 
 // Need proto definition for EvalResult
 #include "proto/net.pb.h"
@@ -51,7 +51,7 @@ class Search {
          std::unique_ptr<UciResponder> uci_responder, // Use lczero::UciResponder
          const lczero::MoveList& searchmoves, // <<< Use lczero::
          std::chrono::steady_clock::time_point start_time,
-         std::unique_ptr<SearchStopper> stopper, bool infinite, bool ponder, // Use lczero::SearchStopper
+         std::unique_ptr<SearchStopper> stopper, bool infinite, bool ponder, // <<< Use classic::SearchStopper (NO lczero::)
          const OptionsDict& options, SyzygyTablebase* syzygy_tb); // Use lczero::OptionsDict, lczero::SyzygyTablebase
 
   ~Search();
@@ -101,7 +101,7 @@ class Search {
   bool bestmove_is_sent_ GUARDED_BY(counters_mutex_) = false;
   lczero::Move final_bestmove_ GUARDED_BY(counters_mutex_); // <<< Use lczero::
   lczero::Move final_pondermove_ GUARDED_BY(counters_mutex_); // <<< Use lczero::
-  std::unique_ptr<lczero::SearchStopper> stopper_ GUARDED_BY(counters_mutex_); // <<< Use lczero::
+  std::unique_ptr<SearchStopper> stopper_ GUARDED_BY(counters_mutex_); // <<< Use classic::SearchStopper (NO lczero::)
 
   Mutex threads_mutex_;
   std::vector<std::thread> threads_ GUARDED_BY(threads_mutex_);
@@ -174,7 +174,7 @@ class SearchWorker {
     }
 
     Node* node;
-    std::unique_ptr<EvalResult> eval;
+    std::unique_ptr<EvalResult> eval; // Use EvalResult from proto
     int multivisit = 0;
     int maxvisit = 0;
     uint16_t depth;
