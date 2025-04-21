@@ -1,6 +1,6 @@
 /*
   This file is part of Leela Chess Zero.
-  Copyright (C) 2018 The LCZero Authors
+  Copyright (C) 2018-2023 The LCZero Authors
 
   Leela Chess is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -32,6 +32,8 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <vector> // Use std::vector
+#include <list>   // For GCQueue
 
 #include "chess/board.h"
 #include "chess/callbacks.h"
@@ -40,7 +42,7 @@
 #include "neural/encoder.h"
 #include "proto/net.pb.h"
 #include "utils/mutex.h"
-#include "utils/nonparallelvector.h" // Include for NonParallelVector
+// #include "utils/nonparallelvector.h" // REMOVED THIS LINE
 
 namespace lczero {
 namespace classic {
@@ -48,15 +50,16 @@ namespace classic {
 // Terminology:
 // * Edge - a potential edge with a move and policy information.
 // * Node - an existing edge with number of visits and evaluation.
-// * LowNode - a node with number of visits, evaluation and edges.
+// * LowNode - a node with number of visits, evaluation and edges. -> OBSOLETE TERM
+// Node class now incorporates what LowNode used to.
 //
 // Storage:
-// * Potential edges are stored in a simple array inside the LowNode as edges_.
-// * Existing edges are stored in a linked list starting with a child_ pointer
-//   in the LowNode and continuing with a sibling_ pointer in each Node.
-// * Existing edges have a copy of their potential edge counterpart, index_
-//   among potential edges and are linked to the target LowNode via the
-//   low_node_ pointer.
+// * Potential edges are stored in a simple array inside the Node as edges_.
+// * Existing children Nodes are stored in a linked list starting with a child_ pointer
+//   in the Node and continuing with a sibling_ pointer in each child Node,
+//   OR as a contiguous array if solid_children_ is true.
+// * Existing children Nodes have a copy of their potential edge counterpart, index_
+//   among potential edges.
 //
 // Example:
 //                                Parent Node
@@ -126,6 +129,9 @@ class Edge_Iterator;
 
 template <bool is_const>
 class VisitedNode_Iterator;
+
+typedef std::list<uint64_t> GCQueue; // Defined here, likely from nodetree.h previously
+class NodeTree; // Forward declaration
 
 class Node {
  public:
@@ -535,13 +541,6 @@ class Edge_Iterator : public EdgeAndNode {
   uint16_t current_idx_ = 0;
   uint16_t total_count_ = 0;
 };
-
-inline Node::ConstIterator Node::Edges() const {
-  return {*this, !solid_children_ ? &child_ : nullptr};
-}
-inline Node::Iterator Node::Edges() {
-  return {*this, !solid_children_ ? &child_ : nullptr};
-}
 
 // TODO(crem) Replace this with less hacky iterator once we support C++17.
 // This class has multiple hypostases within one class:
