@@ -33,6 +33,7 @@
 #include <optional>
 #include <shared_mutex>
 #include <thread>
+#include <vector> // Added for std::vector
 
 #include "chess/callbacks.h"
 #include "chess/uciloop.h"
@@ -46,6 +47,8 @@
 
 namespace lczero {
 namespace classic {
+
+// Removed typedef for BackupPath as it seems unused in this version
 
 class Search {
  public:
@@ -96,6 +99,12 @@ class Search {
 
   // Returns NN eval for a given node from cache, if that node is cached.
   std::optional<EvalResult> GetCachedNNEval(const Node* node) const;
+
+  // --- Root Beam Search ADDED ---
+  void UpdateRootBeam(Node* root_node) REQUIRES(nodes_mutex_);
+  bool IsRootBeamActive() const REQUIRES_SHARED(nodes_mutex_) { return root_beam_active_; }
+  const std::vector<int>& GetRootBeamIndices() const REQUIRES_SHARED(nodes_mutex_) { return root_beam_indices_; }
+  // --- END Root Beam Search ADDED ---
 
  private:
   // Computes the best move, maybe with temperature (according to the settings).
@@ -189,6 +198,12 @@ class Search {
   uint16_t max_depth_ GUARDED_BY(nodes_mutex_) = 0;
   // Cumulative depth of all paths taken in PickNodetoExtend.
   uint64_t cum_depth_ GUARDED_BY(nodes_mutex_) = 0;
+
+  // --- Root Beam Search State ADDED ---
+  bool root_beam_active_ GUARDED_BY(nodes_mutex_) = false;
+  std::vector<int> root_beam_indices_ GUARDED_BY(nodes_mutex_);
+  uint64_t last_root_beam_update_visits_ GUARDED_BY(nodes_mutex_) = 0;
+  // --- END Root Beam Search State ADDED ---
 
   std::optional<std::chrono::steady_clock::time_point> nps_start_time_
       GUARDED_BY(counters_mutex_);
