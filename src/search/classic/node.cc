@@ -40,9 +40,10 @@
 #include <thread>
 #include <unordered_set>
 #include <iomanip> // Added for std::setprecision etc.
+#include <vector> // Use std::vector
 
 #include "neural/encoder.h"
-#include "neural/network.h"
+#include "neural/network.h" // Include for BackendComputation etc.
 #include "utils/exception.h"
 #include "utils/hashcat.h"
 
@@ -112,8 +113,8 @@ class NodeGarbageCollector {
   }
 
   mutable Mutex gc_mutex_;
-  NonParallelVector<std::unique_ptr<Node>> subtrees_to_gc_ GUARDED_BY(gc_mutex_); // Use NonParallelVector
-  NonParallelVector<size_t> subtrees_to_gc_solid_size_ GUARDED_BY(gc_mutex_); // Use NonParallelVector
+  std::vector<std::unique_ptr<Node>> subtrees_to_gc_ GUARDED_BY(gc_mutex_); // Use std::vector
+  std::vector<size_t> subtrees_to_gc_solid_size_ GUARDED_BY(gc_mutex_); // Use std::vector
 
   // When true, Worker() should stop and exit.
   std::atomic<bool> stop_{false};
@@ -135,7 +136,7 @@ Move Edge::GetMove(bool as_opponent) const {
 }
 
 // Policy priors (P) are stored in a compressed 16-bit format.
-// ... (rest of SetP/GetP comments remain the same) ...
+// ... (rest of comments) ...
 
 void Edge::SetP(float p) {
   assert(0.0f <= p && p <= 1.0f);
@@ -207,7 +208,11 @@ Edge* Node::GetEdgeToNode(const Node* node) const {
   return &edges_[node->index_];
 }
 
-Edge* Node::GetOwnEdge() const { return GetParent()->GetEdgeToNode(this); }
+Edge* Node::GetOwnEdge() const {
+  if (parent_ == nullptr) return nullptr; // Root node has no edge to itself
+  return GetParent()->GetEdgeToNode(this);
+}
+
 
 std::string Node::DebugString() const {
   std::ostringstream oss;
@@ -314,8 +319,13 @@ void Node::MakeNotTerminal() {
     }
 
     // Recompute with current eval (instead of network's) and children's eval.
-    wl_ /= n_;
-    d_ /= n_;
+    if (n_ > 0) { // Avoid division by zero
+        wl_ /= n_;
+        d_ /= n_;
+    } else { // If n_ is still 0 after loop (only possible if n_ initially 0 and no children had visits)
+        wl_ = 0.0;
+        d_ = 0.0; // Or perhaps 1.0 if representing an unknown state? Check semantics.
+    }
   }
 }
 
@@ -334,18 +344,28 @@ void Node::CancelScoreUpdate(int multivisit) { n_in_flight_ -= multivisit; }
 
 void Node::FinalizeScoreUpdate(float v, float d, float m, int multivisit) {
   // Recompute Q.
-  wl_ += multivisit * (v - wl_) / (n_ + multivisit);
-  d_ += multivisit * (d - d_) / (n_ + multivisit);
-  m_ += multivisit * (m - m_) / (n_ + multivisit);
+  const uint32_t n_new = n_ + multivisit;
+  if (n_new > 0) { // Avoid division by zero
+    wl_ += multivisit * (v - wl_) / n_new;
+    d_ += multivisit * (d - d_) / n_new;
+    m_ += multivisit * (m - m_) / n_new;
+  } else {
+    // Should not happen if multivisit > 0, but handle defensively
+    wl_ = v;
+    d_ = d;
+    m_ = m;
+  }
 
   // Increment N.
   n_ += multivisit;
   // Decrement virtual loss.
+  assert(n_in_flight_ >= (uint32_t)multivisit);
   n_in_flight_ -= multivisit;
 }
 
 void Node::AdjustForTerminal(float v, float d, float m, int multivisit) {
   // Recompute Q.
+  assert(n_ > 0); // Should only adjust nodes with visits
   wl_ += multivisit * v / n_;
   d_ += multivisit * d / n_;
   m_ += multivisit * m / n_;
@@ -361,7 +381,7 @@ void Node::RevertTerminalVisits(float v, float d, float m, int multivisit) {
     m_ = 0.0;
     n_ = 0;
   } else {
-    // Recompute Q and M.
+    // Recompute Q and M. Avoid division by zero.
     wl_ -= multivisit * (v - wl_) / n_new;
     d_ -= multivisit * (d - d_) / n_new;
     m_ -= multivisit * (m - m_) / n_new;
@@ -523,3 +543,4 @@ void NodeTree::DeallocateTree() {
 
 }  // namespace classic
 }  // namespace lczero
+// --- END OF FILE mcts/node.cc ---
