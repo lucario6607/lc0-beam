@@ -17,11 +17,11 @@
 #include <vector>
 
 // Corrected Includes (NO chess/ prefix - confirmed from repo)
-#include "board.h"     // <<< Final Path Correction
-#include "callbacks.h" // <<< Final Path Correction
-#include "chess.h"     // <<< Final Path Correction
-#include "gamestate.h" // <<< Final Path Correction
-#include "position.h" // <<< Final Path Correction
+#include "board.h"
+#include "callbacks.h"
+#include "chess.h"
+#include "gamestate.h"
+#include "position.h"
 #include "neural/encoder.h"
 #include "proto/net.pb.h"
 #include "utils/mutex.h"
