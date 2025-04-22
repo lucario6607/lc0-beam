@@ -491,14 +491,20 @@ const OptionId SearchParams::kSearchSpinBackoffId{
 
 // --- Root Beam Search ADDED ---
 const OptionId SearchParams::kRootBeamWidthId{
-    "root-beam-width", "RootBeamWidth",
-    "If > 0, restricts search to the top N most visited root moves after an initial threshold. 0 disables."};
+    "root-beam-width", "RootBeamMaxWidth", // Changed UCI name to match h file
+    "Maximum beam width (or fixed width if MinWidth=0/disabled). 0 disables beam."};
 const OptionId SearchParams::kRootBeamUpdateThresholdId{
     "root-beam-update-threshold", "RootBeamUpdateThreshold",
     "Number of root visits after which the root beam is calculated and activated."};
 const OptionId SearchParams::kRootBeamUpdateIntervalId{
     "root-beam-update-interval", "RootBeamUpdateInterval",
     "Recalculate root beam every N root visits after initial activation. 0 disables re-evaluation."};
+const OptionId SearchParams::kRootBeamMinWidthId{ // Added Definition
+    "root-beam-min-width", "RootBeamMinWidth",
+    "Minimum beam width when using dynamic width (based on score gap). Set to 0 or >= MaxWidth to disable dynamic width."};
+const OptionId SearchParams::kRootBeamMaxWidthId{ // Added Definition (consistent with header)
+    "root-beam-max-width", "RootBeamMaxWidth",
+    "Maximum beam width (or fixed width if MinWidth=0/disabled). 0 disables beam."};
 // --- END Root Beam Search ADDED ---
 
 
@@ -600,7 +606,8 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<BoolOption>(kSearchSpinBackoffId) = false;
 
   // --- Root Beam Search ADDED ---
-  options->Add<IntOption>(kRootBeamWidthId, 0, 500) = 0; // Disabled by default
+  options->Add<IntOption>(kRootBeamMaxWidthId, 0, 500) = 0; // Renamed from kRootBeamWidthId
+  options->Add<IntOption>(kRootBeamMinWidthId, 0, 500) = 0; // Added
   options->Add<IntOption>(kRootBeamUpdateThresholdId, 0, 1000000) = 100;
   options->Add<IntOption>(kRootBeamUpdateIntervalId, 0, 10000000) = 0; // Disabled by default
   // --- END Root Beam Search ADDED ---
@@ -628,8 +635,9 @@ void SearchParams::Populate(OptionsParser* options) {
   options->HideOption(kWDLMaxSId); // Added hide
   options->HideOption(kWDLDrawRateTargetId);
   options->HideOption(kWDLBookExitBiasId);
-  // --- Root Beam Search - UNCOMMENT/REMOVE HideOption TO MAKE VISIBLE IN UCI ---
-  // options->HideOption(kRootBeamWidthId);
+  // --- Root Beam Search - Make relevant ones visible for tuning ---
+  // options->HideOption(kRootBeamMaxWidthId); // Keep MaxWidth visible if desired
+  // options->HideOption(kRootBeamMinWidthId);  // Keep MinWidth visible if desired
   // options->HideOption(kRootBeamUpdateThresholdId);
   // options->HideOption(kRootBeamUpdateIntervalId);
   // --- END Root Beam Search ---
@@ -705,7 +713,7 @@ SearchParams::SearchParams(const OptionsDict& options)
       kWDLMaxS(options.Get<float>(kWDLMaxSId)), // Added init
       kWDLEvalObjectivity(options.Get<float>(kWDLEvalObjectivityId)),
       kMaxOutOfOrderEvalsFactor(options.Get<float>(kMaxOutOfOrderEvalsFactorId)), // Renamed & type changed
-      // kMaxOutOfOrderEvals calculation moved inside constructor body below
+      // kMaxOutOfOrderEvals removed from initializer list
       kNpsLimit(options.Get<float>(kNpsLimitId)),
       kSolidTreeThreshold(options.Get<int>(kSolidTreeThresholdId)), // Added init
       kTaskWorkersPerSearchWorker(
@@ -728,16 +736,17 @@ SearchParams::SearchParams(const OptionsDict& options)
           options.Get<float>(kMaxCollisionVisitsScalingPowerId)),
       kSearchSpinBackoff(options_.Get<bool>(kSearchSpinBackoffId)),
       // --- Root Beam Search ADDED ---
-      kRootBeamWidth(options.Get<int>(kRootBeamWidthId)),
+      kRootBeamWidth(options.Get<int>(kRootBeamWidthId)), // Use old ID for max width if needed
       kRootBeamUpdateThreshold(options.Get<int>(kRootBeamUpdateThresholdId)),
       kRootBeamUpdateInterval(options.Get<int>(kRootBeamUpdateIntervalId)),
+      kRootBeamMinWidth(options.Get<int>(kRootBeamMinWidthId)),
+      kRootBeamMaxWidth(options.Get<int>(kRootBeamMaxWidthId)) // Also init max width explicitly
       // --- END Root Beam Search ADDED ---
       // Removed initializers for features not present in the corrected params.h
-      kMaxOutOfOrderEvals(std::max( // Calculation now inside constructor body
-          1, static_cast<int>(kMaxOutOfOrderEvalsFactor *
-                              (kMiniBatchSize > 0 ? kMiniBatchSize : DEFAULT_MAX_PREFETCH))))
        { // Start of constructor body
-           // (kMaxOutOfOrderEvals calculation moved here)
+           // Calculate kMaxOutOfOrderEvals here
+           const int effective_batch_size = (kMiniBatchSize > 0) ? kMiniBatchSize : DEFAULT_MAX_PREFETCH; // Use default if minibatch is 0
+           kMaxOutOfOrderEvals = std::max(1, static_cast<int>(kMaxOutOfOrderEvalsFactor * effective_batch_size));
        } // End of constructor body
 
 } // namespace classic
