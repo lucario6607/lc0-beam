@@ -1,5 +1,3 @@
-// --- START OF FILE search/classic/params.h ---
-
 /*
   This file is part of Leela Chess Zero.
   Copyright (C) 2018-2023 The LCZero Authors
