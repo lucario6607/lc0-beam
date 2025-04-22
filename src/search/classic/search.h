@@ -19,7 +19,6 @@
 // Force include core type headers FIRST
 #include "chess/types.h"     // <<< Defines Value, Move, Eval etc.
 #include "chess/position.h" // <<< Defines PositionHash, Position etc.
-#include "chess/chess.h"     // <<< Include this too, might contain using directives or other essentials
 
 // Other includes
 #include "chess/callbacks.h" // Defines ThinkingInfo, IterationStats, StoppersHints
