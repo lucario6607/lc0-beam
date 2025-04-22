@@ -225,42 +225,116 @@ void ApplyDirichletNoise(Node* node, float eps, double alpha) {
 }  // namespace
 
 // --- Root Beam Search Implementation ---
+
+// Helper function to calculate PUCT score (extracted for reuse)
+inline float CalculatePuctScore(const SearchParams& params, Node* parent, const EdgeAndNode& child_edge,
+                                float fpu, float draw_score, const MEvaluator& m_evaluator) {
+    const float Q = child_edge.GetQ(fpu, draw_score);
+    const float U = child_edge.GetU(ComputeCpuct(params, parent->GetN(), parent->GetParent() == nullptr)); // Assuming root parent is null
+    const float M = m_evaluator.GetMUtility(child_edge, Q);
+    return Q + U + M;
+}
+
+
 void Search::UpdateRootBeam(Node* root_node) REQUIRES(nodes_mutex_) {
     // Ensure params_ is initialized before accessing GetRootBeamWidth()
-    if (!root_node->HasChildren() || params_.GetRootBeamWidth() <= 0) {
+    if (!root_node->HasChildren() || params_.GetRootBeamMaxWidth() <= 0) { // Use MaxWidth to enable/disable
         root_beam_indices_.clear();
         root_beam_active_ = false; // Ensure beam is inactive if conditions not met
         return;
     }
 
     const int num_children = root_node->GetNumEdges(); // Use GetNumEdges as it reflects potential children
-    const int k = params_.GetRootBeamWidth();
+    const int min_k = params_.GetRootBeamMinWidth();
+    const int max_k = params_.GetRootBeamMaxWidth();
+    bool use_dynamic_k = (min_k > 0 && min_k < max_k);
+    int current_k = max_k; // Default to max width
 
-    if (num_children <= k) {
+
+    if (num_children <= (use_dynamic_k ? min_k : max_k)) { // Use min_k if dynamic, else max_k
         // Beam is wider than or equal to number of children, no restriction needed
         root_beam_indices_.clear(); // Signal no restriction
         root_beam_active_ = false; // Keep inactive if no restriction needed
         return;
     }
 
-    std::vector<std::pair<uint32_t, int>> child_visits; // {visits, index} - Use uint32_t for GetN()
-    child_visits.reserve(num_children);
+    std::vector<std::pair<float, int>> scored_children; // {PUCT_score, index}
+    scored_children.reserve(num_children);
+
+    // Calculate PUCT scores for ranking
+    const float draw_score = GetDrawScore(/* is_odd_depth= */ false); // Root is even depth
+    const float fpu = GetFpu(params_, root_node, /* is_root= */ true, draw_score);
+    const MEvaluator m_evaluator = backend_attributes_.has_mlh ? MEvaluator(params_, root_node) : MEvaluator();
+
     int idx = 0;
     for (const auto& edge : root_node->Edges()) {
-        child_visits.push_back({edge.GetN(), idx++}); // GetN() gets visits for the child edge/node
+        // Skip moves filtered by UCI searchmoves or TB
+        if (!root_move_filter_.empty() &&
+            std::find(root_move_filter_.begin(), root_move_filter_.end(),
+                      edge.GetMove()) == root_move_filter_.end()) {
+             idx++;
+             continue;
+        }
+        // Skip nodes with virtual loss (if applicable - Check if needed here)
+        // if (edge.node() && edge.node()->GetNInFlight() > 0) {
+        //      idx++;
+        //      continue;
+        // }
+
+        float puct_score = CalculatePuctScore(params_, root_node, edge, fpu, draw_score, m_evaluator);
+        scored_children.push_back({puct_score, idx++});
     }
 
-    // Sort descending by visits
-    std::sort(child_visits.rbegin(), child_visits.rend());
+    if (scored_children.empty()) { // Handle case where all moves were filtered
+         root_beam_indices_.clear();
+         root_beam_active_ = false;
+         return;
+    }
+
+    // Sort descending by PUCT score
+    std::sort(scored_children.rbegin(), scored_children.rend());
+
+    // --- Dynamic Width Heuristic ---
+    if (use_dynamic_k && scored_children.size() >= 2) {
+        // Simple heuristic: if score gap between #1 and #2 is large relative to
+        // gap between #1 and #k_max, use min width.
+        const float score1 = scored_children[0].first;
+        const float score2 = scored_children[1].first;
+        const int effective_max_k_idx = std::min((int)scored_children.size() - 1, max_k - 1);
+        const float score_k_max = scored_children[effective_max_k_idx].first;
+
+        const float gap1 = score1 - score2;
+        const float gap_k = std::max(1e-6f, score1 - score_k_max); // Avoid division by zero
+        const float relative_gap = gap1 / gap_k;
+
+        // Threshold for deciding if the top move is dominant
+        const float dominance_threshold = 0.5f; // Tune this parameter
+
+        if (relative_gap > dominance_threshold) {
+            current_k = min_k;
+             LOGFILE << "Dynamic beam: Using MinWidth (" << min_k << ") due to score gap.";
+        } else {
+            current_k = max_k;
+             LOGFILE << "Dynamic beam: Using MaxWidth (" << max_k << ").";
+        }
+        // Clamp k to the number of available ranked children
+        current_k = std::min(current_k, (int)scored_children.size());
+        current_k = std::max(current_k, min_k); // Ensure it's at least MinWidth
+    } else {
+        // Use fixed MaxWidth if dynamic k is disabled or not enough moves
+        current_k = std::min(max_k, (int)scored_children.size());
+    }
+    // --- End Dynamic Width Heuristic ---
+
 
     // Store the indices of the top k children
     root_beam_indices_.clear();
-    root_beam_indices_.reserve(k);
-    for (int i = 0; i < k && i < (int)child_visits.size(); ++i) { // Fixed warning: sign-compare
-        root_beam_indices_.push_back(child_visits[i].second);
+    root_beam_indices_.reserve(current_k);
+    for (int i = 0; i < current_k; ++i) {
+        root_beam_indices_.push_back(scored_children[i].second);
     }
     root_beam_active_ = true; // Activate the beam
-    LOGFILE << "Root beam activated. Top " << root_beam_indices_.size() << " indices selected.";
+    LOGFILE << "Root beam updated. Width=" << current_k << ". Top " << root_beam_indices_.size() << " indices selected.";
 }
 // --- End Root Beam Search Implementation ---
 
@@ -1596,7 +1670,7 @@ void SearchWorker::PickNodesToExtend(int collision_limit) {
   // --- Root Beam Search Modification ---
   // Check and potentially update the beam *before* starting the task distribution.
   // This requires acquiring the write lock temporarily if needed.
-  if (search_->params_.GetRootBeamWidth() > 0) { // Check if beam is configured
+  if (search_->params_.GetRootBeamMaxWidth() > 0) { // Check if beam is configured (use MaxWidth)
       bool needs_update = false;
       uint32_t current_root_visits = 0;
       int64_t next_update_threshold = 0;
@@ -2277,8 +2351,8 @@ int SearchWorker::PrefetchIntoCache(Node* node, int budget, bool is_odd_depth) {
     if (first_unsorted_index != scores.size() &&
         i + 2 >= first_unsorted_index) {
       const int new_unsorted_index =
-          std::min(scores.size(), budget < 2 ? first_unsorted_index + 2
-                                             : first_unsorted_index + 3);
+          std::min((int)scores.size(), (int)(budget < 2 ? first_unsorted_index + 2 // Cast to int
+                                             : first_unsorted_index + 3));
       std::partial_sort(scores.begin() + first_unsorted_index,
                         scores.begin() + new_unsorted_index, scores.end(),
                         [](const ScoredEdge& a, const ScoredEdge& b) {
