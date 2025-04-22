@@ -286,4 +286,3 @@ class SearchWorker {
 
 }  // namespace classic
 }  // namespace lczero
-
