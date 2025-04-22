@@ -16,45 +16,43 @@
 #include <vector>
 #include <utility>
 
-// Force include core type headers FIRST
-#include "chess/types.h"     // <<< Defines Value, Move, Eval etc.
-#include "chess/position.h" // <<< Defines PositionHash, Position etc.
-
-// Other includes
-#include "chess/callbacks.h" // Defines ThinkingInfo, IterationStats, StoppersHints
-#include "chess/uciloop.h"   // Defines UciResponder
-#include "chess/gamestate.h" // Defines PositionHistory
+// Corrected Includes (Using chess/ prefix consistently)
+#include "chess/callbacks.h" // Defines lczero::ThinkingInfo, lczero::IterationStats, lczero::StoppersHints
+#include "chess/types.h"     // <<< Defines lczero::Value, lczero::Move, lczero::Eval etc.
+#include "chess/position.h" // <<< Defines lczero::PositionHash, lczero::Position
+#include "chess/uciloop.h"   // <<< Defines lczero::UciResponder
+#include "chess/gamestate.h" // <<< Defines lczero::PositionHistory
 #include "neural/backend.h"
-#include "search/classic/params.h" // Needs to be BEFORE node.h if it uses types
-#include "search/classic/node.h"   // Includes node.h
-#include "search/classic/stoppers/timemgr.h" // Defines classic::SearchStopper
-#include "syzygy/syzygy.h"
+#include "search/classic/node.h" // Includes node.h (which uses chess/ prefix and lczero::)
+#include "search/classic/params.h"
+#include "search/classic/stoppers/timemgr.h" // <<< Defines classic::SearchStopper
+#include "syzygy/syzygy.h" // Path may vary, defines lczero::SyzygyTablebase?
 #include "utils/logging.h"
 #include "utils/mutex.h"
-#include "utils/optionsdict.h"
+#include "utils/optionsdict.h" // Defines lczero::OptionsDict
 
-#include "proto/net.pb.h" // For EvalResult
+// Need proto definition for EvalResult
+#include "proto/net.pb.h"
 
 
 namespace lczero {
 namespace classic {
 
-// Define constants using types from types.h (should be accessible here)
-constexpr Value kValueKnownWin = kValueMate; // <<< NO lczero::
-constexpr Value kValueKnownLoss = -kValueMate; // <<< NO lczero::
+// Define constants using types from lczero namespace
+constexpr lczero::Value kValueKnownWin = lczero::kValueMate; // <<< Use lczero::
+constexpr lczero::Value kValueKnownLoss = -lczero::kValueMate; // <<< Use lczero::
 
 // TTEntry structure placeholder
 // ...
 
 class Search {
  public:
-  // Use unqualified types, assuming they are brought into scope by includes
-  Search(const NodeTree& tree, Backend* network,
-         std::unique_ptr<UciResponder> uci_responder,
-         const MoveList& searchmoves,
+  Search(const NodeTree& tree, lczero::Backend* network, // Use lczero::
+         std::unique_ptr<lczero::UciResponder> uci_responder, // Use lczero::
+         const lczero::MoveList& searchmoves, // Use lczero::
          std::chrono::steady_clock::time_point start_time,
-         std::unique_ptr<SearchStopper> stopper, bool infinite, bool ponder,
-         const OptionsDict& options, SyzygyTablebase* syzygy_tb);
+         std::unique_ptr<SearchStopper> stopper, bool infinite, bool ponder, // <<< Use UNQUALIFIED SearchStopper
+         const lczero::OptionsDict& options, lczero::SyzygyTablebase* syzygy_tb); // Use lczero::
 
   ~Search();
 
@@ -65,8 +63,8 @@ class Search {
   void Wait();
   bool IsSearchActive() const;
 
-  std::pair<Move, Move> GetBestMove(); // <<< NO lczero::
-  Eval GetBestEval(Move* move = nullptr, bool* is_terminal = nullptr) const; // <<< NO lczero::
+  std::pair<lczero::Move, lczero::Move> GetBestMove(); // Use lczero::
+  lczero::Eval GetBestEval(lczero::Move* move = nullptr, bool* is_terminal = nullptr) const; // <<< Use lczero::
   std::int64_t GetTotalPlayouts() const;
   const SearchParams& GetParams() const { return params_; }
   void ResetBestMove();
@@ -81,19 +79,19 @@ class Search {
 
   int64_t GetTimeSinceStart() const;
   int64_t GetTimeSinceFirstBatch() const;
-  void MaybeTriggerStop(const IterationStats& stats, StoppersHints* hints); // <<< NO lczero::
+  void MaybeTriggerStop(const lczero::IterationStats& stats, lczero::StoppersHints* hints); // <<< Use lczero::
   void MaybeOutputInfo();
   void SendUciInfo();
   void FireStopInternal();
   void SendMovesStats() const;
   void WatchdogThread();
-  void PopulateCommonIterationStats(IterationStats* stats); // <<< NO lczero::
+  void PopulateCommonIterationStats(lczero::IterationStats* stats); // <<< Use lczero::
   std::vector<std::string> GetVerboseStats(Node* node) const;
   float GetDrawScore(bool is_odd_depth) const;
   void CancelSharedCollisions();
-  PositionHistory GetPositionHistoryAtNode(const Node* node) const; // <<< NO lczero::
+  lczero::PositionHistory GetPositionHistoryAtNode(const Node* node) const; // <<< Use lczero::
 
-  void StoreTT(PositionHash hash, Node* node); // <<< NO lczero::
+  void StoreTT(lczero::PositionHash hash, Node* node); // <<< Use lczero::
 
 
   mutable Mutex counters_mutex_ ACQUIRED_AFTER(nodes_mutex_);
@@ -101,31 +99,31 @@ class Search {
   std::condition_variable watchdog_cv_;
   bool ok_to_respond_bestmove_ GUARDED_BY(counters_mutex_) = true;
   bool bestmove_is_sent_ GUARDED_BY(counters_mutex_) = false;
-  Move final_bestmove_ GUARDED_BY(counters_mutex_); // <<< NO lczero::
-  Move final_pondermove_ GUARDED_BY(counters_mutex_); // <<< NO lczero::
-  std::unique_ptr<SearchStopper> stopper_ GUARDED_BY(counters_mutex_); // <<< UNQUALIFIED
+  lczero::Move final_bestmove_ GUARDED_BY(counters_mutex_); // <<< Use lczero::
+  lczero::Move final_pondermove_ GUARDED_BY(counters_mutex_); // <<< Use lczero::
+  std::unique_ptr<SearchStopper> stopper_ GUARDED_BY(counters_mutex_); // <<< Use UNQUALIFIED SearchStopper
 
   Mutex threads_mutex_;
   std::vector<std::thread> threads_ GUARDED_BY(threads_mutex_);
 
   Node* root_node_;
-  SyzygyTablebase* syzygy_tb_; // <<< NO lczero::
-  const PositionHistory& played_history_; // <<< NO lczero::
+  lczero::SyzygyTablebase* syzygy_tb_; // <<< Use lczero::
+  const lczero::PositionHistory& played_history_; // <<< Use lczero::
 
-  Backend* const backend_; // <<< NO lczero::
-  BackendAttributes backend_attributes_; // <<< NO lczero::
+  lczero::Backend* const backend_; // <<< Use lczero::
+  lczero::BackendAttributes backend_attributes_; // <<< Use lczero::
   const SearchParams params_;
-  const MoveList searchmoves_; // <<< NO lczero::
+  const lczero::MoveList searchmoves_; // <<< Use lczero::
   const std::chrono::steady_clock::time_point start_time_;
   int64_t initial_visits_;
   bool root_is_in_dtz_ = false;
   std::atomic<int> tb_hits_{0};
-  const MoveList root_move_filter_; // <<< NO lczero::
+  const lczero::MoveList root_move_filter_; // <<< Use lczero::
 
   mutable SharedMutex nodes_mutex_;
   EdgeAndNode current_best_edge_ GUARDED_BY(nodes_mutex_);
   Edge* last_outputted_info_edge_ GUARDED_BY(nodes_mutex_) = nullptr;
-  ThinkingInfo last_outputted_uci_info_ GUARDED_BY(nodes_mutex_); // <<< NO lczero::
+  lczero::ThinkingInfo last_outputted_uci_info_ GUARDED_BY(nodes_mutex_); // <<< Use lczero::
   int64_t total_playouts_ GUARDED_BY(nodes_mutex_) = 0;
   int64_t total_batches_ GUARDED_BY(nodes_mutex_) = 0;
   uint16_t max_depth_ GUARDED_BY(nodes_mutex_) = 0;
@@ -141,7 +139,7 @@ class Search {
   std::vector<std::pair<Node*, int>> shared_collisions_
       GUARDED_BY(nodes_mutex_);
 
-  std::unique_ptr<UciResponder> uci_responder_; // <<< NO lczero::
+  std::unique_ptr<lczero::UciResponder> uci_responder_; // <<< Use lczero::
   ContemptMode contempt_mode_;
   friend class SearchWorker;
 };
@@ -154,7 +152,7 @@ class SearchWorker {
 
   void RunBlocking();
   void ExecuteOneIteration();
-  void InitializeIteration(std::unique_ptr<BackendComputation> computation); // <<< NO lczero::
+  void InitializeIteration(std::unique_ptr<lczero::BackendComputation> computation); // <<< Use lczero::
   void GatherMinibatch();
   void CollectCollisions();
   void MaybePrefetchIntoCache();
@@ -176,14 +174,14 @@ class SearchWorker {
     }
 
     Node* node;
-    std::unique_ptr<EvalResult> eval;
+    std::unique_ptr<EvalResult> eval; // Use EvalResult from proto
     int multivisit = 0;
     int maxvisit = 0;
     uint16_t depth;
     bool nn_queried = false;
     bool is_cache_hit = false;
     bool is_collision = false;
-    std::vector<Move> moves_to_visit; // <<< NO lczero::
+    std::vector<lczero::Move> moves_to_visit; // <<< Use lczero::
     bool ooo_completed = false;
 
     static NodeToProcess Collision(Node* node, uint16_t depth,
@@ -215,8 +213,8 @@ class SearchWorker {
     std::vector<std::unique_ptr<std::array<int, 256>>> visits_to_perform;
     std::vector<int> vtp_last_filled;
     std::vector<int> current_path;
-    std::vector<Move> moves_to_path; // <<< NO lczero::
-    PositionHistory history; // <<< NO lczero::
+    std::vector<lczero::Move> moves_to_path; // <<< Use lczero::
+    lczero::PositionHistory history; // <<< Use lczero::
     TaskWorkspace();
   };
 
@@ -226,13 +224,13 @@ class SearchWorker {
     Node* start;
     int base_depth;
     int collision_limit;
-    std::vector<Move> moves_to_base; // <<< NO lczero::
+    std::vector<lczero::Move> moves_to_base; // <<< Use lczero::
     std::vector<NodeToProcess> results;
     int start_idx;
     int end_idx;
     bool complete = false;
 
-    PickTask(Node* node, uint16_t depth, const std::vector<Move>& base_moves, // <<< NO lczero::
+    PickTask(Node* node, uint16_t depth, const std::vector<lczero::Move>& base_moves, // <<< Use lczero::
              int collision_limit);
     PickTask(int start_idx, int end_idx);
   };
@@ -240,19 +238,19 @@ class SearchWorker {
   bool AddNodeToComputation(Node* node);
   int PrefetchIntoCache(Node* node, int budget, bool is_odd_depth);
   void DoBackupUpdateSingleNode(const NodeToProcess& node_to_process);
-  bool MaybeSetBounds(Node* p, float m, int* n_to_fix, Value* v_delta, // <<< NO lczero::
+  bool MaybeSetBounds(Node* p, float m, int* n_to_fix, lczero::Value* v_delta, // <<< Use lczero::Value*
                       float* d_delta, float* m_delta);
   void PickNodesToExtend(int collision_limit);
   void PickNodesToExtendTask(Node* starting_point, int base_depth,
                              int collision_limit,
-                             const std::vector<Move>& moves_to_base, // <<< NO lczero::
+                             const std::vector<lczero::Move>& moves_to_base, // <<< Use lczero::
                              std::vector<NodeToProcess>* receiver,
                              TaskWorkspace* workspace);
   void EnsureNodeTwoFoldCorrectForDepth(Node* node, int depth);
   void ProcessPickedTask(int batch_start, int batch_end,
                          TaskWorkspace* workspace);
-  void ExtendNode(Node* node, int depth, const std::vector<Move>& moves_to_add, // <<< NO lczero::
-                  PositionHistory* history); // <<< NO lczero::
+  void ExtendNode(Node* node, int depth, const std::vector<lczero::Move>& moves_to_add, // <<< Use lczero::
+                  lczero::PositionHistory* history); // <<< Use lczero::
   void FetchSingleNodeResult(NodeToProcess* node_to_process);
   void RunTasks(int tid);
   void ResetTasks();
@@ -260,17 +258,17 @@ class SearchWorker {
 
   Search* const search_;
   std::vector<NodeToProcess> minibatch_;
-  std::unique_ptr<BackendComputation> computation_; // <<< NO lczero::
+  std::unique_ptr<lczero::BackendComputation> computation_; // <<< Use lczero::
   int task_workers_;
   int target_minibatch_size_;
   int max_out_of_order_;
-  PositionHistory history_; // <<< NO lczero::
+  lczero::PositionHistory history_; // <<< Use lczero::
   int number_out_of_order_ = 0;
   const SearchParams& params_;
   std::unique_ptr<Node> precached_node_;
   const bool moves_left_support_;
-  IterationStats iteration_stats_; // <<< NO lczero::
-  StoppersHints latest_time_manager_hints_; // <<< NO lczero::
+  lczero::IterationStats iteration_stats_; // <<< Use lczero::
+  lczero::StoppersHints latest_time_manager_hints_; // <<< Use lczero::
 
   Mutex picking_tasks_mutex_;
   std::vector<PickTask> picking_tasks_;
