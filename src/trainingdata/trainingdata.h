@@ -16,10 +16,10 @@
 
 #include "chess/board.h"
 #include "chess/gamestate.h"
-#include "chess/move.h"
+// #include "chess/move.h" // Move is included via types.h
 #include "chess/position.h"
-#include "chess/types.h"     // <<< Included for lczero::Eval
-#include "utils/bitops.h"
+#include "chess/types.h"     // <<< Included for Eval definition
+#include "utils/bitops.h"    // Assuming path is correct
 
 namespace lczero {
 
@@ -69,18 +69,18 @@ class TrainingData {
   std::string ToString() const;
   void FillInputPlanes(float planes[MAX_INPUT_PLANES][squares::SIZE]) const;
 
-  // Member variables (using types assumed to be in lczero namespace via includes)
+  // Member variables (using types assumed to be accessible)
   PositionHistory history;
   int16_t policy_indices[MAX_OUTPUT_POLICY];
   float policy_values[MAX_OUTPUT_POLICY];
   uint8_t policy_size;
   GameResult game_result;
-  Value root_eval; // Added in version 7. Use result before that.
+  Value root_eval;
 
   // Added in version 8
   float root_q;
   float root_d;
-  uint8_t best_ply; // Ply of best move in search relative to current ply.
+  uint8_t best_ply;
 
   // Added in version 9
   Value expected_value;
@@ -97,11 +97,8 @@ class TrainingDataWriter {
  public:
   virtual ~TrainingDataWriter() = default;
 
-  // Add new training data chunk.
   virtual void AddChunk(const TrainingData::Chunk& chunk) = 0;
-  // Signals end of game. Allows writer to finalize the game etc.
   virtual void GameFinished() = 0;
-  // Returns total number of training positions stored.
   virtual std::int64_t GetPositionCount() = 0;
 };
 
