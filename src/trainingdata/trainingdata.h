@@ -1,6 +1,6 @@
 /*
   This file is part of Leela Chess Zero.
-  Copyright (C) 2021 The LCZero Authors
+  Copyright (C) 2018-2020 The LCZero Authors
 
   Leela Chess is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -27,90 +27,117 @@
 
 #pragma once
 
-#include "neural/backend.h"
-#include "search/classic/node.h"
-#include "trainingdata/writer.h"
+#include <array>
+#include <cstdint>
+#include <iostream>
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "chess/board.h"     // For MoveList if needed
+#include "chess/gamestate.h" // For PositionHistory
+#include "chess/move.h"      // For Move definition
+#include "chess/position.h" // For Position definition
+#include "chess/types.h"     // <<< CORRECTED: Includes Eval definition in lczero namespace
+#include "utils/bitops.h"
 
 namespace lczero {
 
-#pragma pack(push, 1)
-
-struct V6TrainingData {
-  uint32_t version;
-  uint32_t input_format;
-  float probabilities[1858];
-  uint64_t planes[104];
-  uint8_t castling_us_ooo;
-  uint8_t castling_us_oo;
-  uint8_t castling_them_ooo;
-  uint8_t castling_them_oo;
-  // For input type 3 contains enpassant column as a mask.
-  uint8_t side_to_move_or_enpassant;
-  uint8_t rule50_count;
-  // Bitfield with the following allocation:
-  //  bit 7: side to move (input type 3)
-  //  bit 6: position marked for deletion by the rescorer (never set by lc0)
-  //  bit 5: game adjudicated (v6)
-  //  bit 4: max game length exceeded (v6)
-  //  bit 3: best_q is for proven best move (v6)
-  //  bit 2: transpose transform (input type 3)
-  //  bit 1: mirror transform (input type 3)
-  //  bit 0: flip transform (input type 3)
-  // In versions prior to v5 this spot contained an unused move count field.
-  uint8_t invariance_info;
-  // In versions prior to v6 this spot contained thr result as an int8_t.
-  uint8_t dummy;
-  float root_q;
-  float best_q;
-  float root_d;
-  float best_d;
-  float root_m;      // In plies.
-  float best_m;      // In plies.
-  float plies_left;  // This is the training target for MLH.
-  float result_q;
-  float result_d;
-  float played_q;
-  float played_d;
-  float played_m;
-  // The folowing may be NaN if not found in cache.
-  float orig_q;  // For value repair.
-  float orig_d;
-  float orig_m;
-  uint32_t visits;
-  // Indices in the probabilities array.std::optional<EvalResult>
-  uint16_t played_idx;
-  uint16_t best_idx;
-  // Kullback-Leibler divergence between visits and policy (denominator)
-  float policy_kld;
-  uint32_t reserved;
-} PACKED_STRUCT;
-static_assert(sizeof(V6TrainingData) == 8356, "Wrong struct size");
-
-#pragma pack(pop)
-
-class V6TrainingDataArray {
+class TrainingData {
  public:
-  V6TrainingDataArray(FillEmptyHistory white_fill_empty_history,
-                      FillEmptyHistory black_fill_empty_history,
-                      pblczero::NetworkFormat::InputFormat input_format)
-      : fill_empty_history_{white_fill_empty_history, black_fill_empty_history},
-        input_format_(input_format) {}
+  // Maximum planes required by any version of the input format.
+  static constexpr int MAX_INPUT_PLANES = 119;
+  static constexpr int TRAININGDATA_VERSION = 9;
 
-  // Add a chunk.
-  void Add(const classic::Node* node, const PositionHistory& history,
-           Eval best_eval, Eval played_eval,
-           bool best_is_proven, Move best_move, Move played_move,
-           std::span<Move> legal_moves,
-           const std::optional<EvalResult>& nneval, float policy_softmax_temp);
+  TrainingData() {}
 
-  // Writes training data to a file.
-  void Write(TrainingDataWriter* writer, GameResult result,
-             bool adjudicated) const;
+  struct Chunk {
+    PositionHistory history;
+    int16_t policy_indices[MAX_OUTPUT_POLICY];
+    float policy_values[MAX_OUTPUT_POLICY];
+    uint8_t policy_size;
+    GameResult game_result;
+    Value root_eval;
+    Value expected_value;
+
+    // Additional fields for Version >= 8
+    float root_q;
+    float root_d;
+    uint8_t best_ply; // Ply of best move in search relative to current ply.
+  };
+
+  // Populates the chunk from position info, policy map and game result.
+  // Policy should already be filtered for legal moves.
+  static Chunk CreateChunk(const PositionHistory& history,
+                           const std::vector<std::pair<Move, float>>& policy,
+                           GameResult game_result, Value root_eval = 0.0,
+                           Value expected_value = 0.0, float root_q = 0.0f,
+                           float root_d = 0.0f, uint8_t best_ply = 0);
+
+  // Encodes the input planes for the neural net (array must be zero-initialized).
+  // Returns number of planes written.
+  static int FillInputPlanes(const Chunk& chunk,
+                             FillEmptyHistory history_fill_type,
+                             float planes[MAX_INPUT_PLANES][squares::SIZE]);
+  // Decodes training chunk from stdin/socket into a chunk object.
+  static std::optional<Chunk> ReadChunk(std::istream& stream);
+  // Encodes training chunk object into bytes suitable for storage/transfer.
+  static std::string ChunkToString(const Chunk& chunk);
+
+  // Deprecated functions for direct IO from stdin/socket.
+  static std::optional<TrainingData> ReadTrainingData(std::istream& stream);
+  std::string ToString() const;
+  void FillInputPlanes(float planes[MAX_INPUT_PLANES][squares::SIZE]) const;
+
+  PositionHistory history;
+  int16_t policy_indices[MAX_OUTPUT_POLICY];
+  float policy_values[MAX_OUTPUT_POLICY];
+  uint8_t policy_size;
+  GameResult game_result;
+  Value root_eval; // Added in version 7. Use result before that.
+
+  // Added in version 8
+  float root_q;
+  float root_d;
+  uint8_t best_ply; // Ply of best move in search relative to current ply.
+
+  // Added in version 9
+  Value expected_value;
 
  private:
-  std::vector<V6TrainingData> training_data_;
-  FillEmptyHistory fill_empty_history_[2];
-  pblczero::NetworkFormat::InputFormat input_format_;
+  static std::optional<TrainingData> ReadTrainingDataV6(std::istream& stream);
+  static std::optional<TrainingData> ReadTrainingDataV7(std::istream& stream);
+  static std::optional<TrainingData> ReadTrainingDataV8(std::istream& stream);
+  static std::optional<Chunk> ReadTrainingDataV9(std::istream& stream);
+};
+
+// Interface to allow writing training data to different locations.
+class TrainingDataWriter {
+ public:
+  virtual ~TrainingDataWriter() = default;
+
+  // Add new training data chunk.
+  virtual void AddChunk(const TrainingData::Chunk& chunk) = 0;
+  // Signals end of game. Allows writer to finalize the game etc.
+  virtual void GameFinished() = 0;
+  // Returns total number of training positions stored.
+  virtual std::int64_t GetPositionCount() = 0;
+};
+
+// Stores TrainingData::Chunks into specified file.
+class TrainingDataFileWriter : public TrainingDataWriter {
+ public:
+  TrainingDataFileWriter(const std::string& filename);
+  ~TrainingDataFileWriter();
+
+  void AddChunk(const TrainingData::Chunk& chunk) override;
+  void GameFinished() override {}
+  std::int64_t GetPositionCount() override;
+
+ private:
+  class Impl;
+  std::unique_ptr<Impl> pimpl_;
 };
 
 }  // namespace lczero
