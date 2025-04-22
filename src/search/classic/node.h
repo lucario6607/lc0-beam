@@ -18,13 +18,14 @@
 
 // Corrected Includes (Using chess/ prefix)
 #include "chess/board.h"
-#include "chess/callbacks.h"
-#include "chess/types.h"     // <<< Defines Value, GameResult, kValueMate, Move etc.
+#include "chess/callbacks.h" // Needed indirectly? Keep for safety.
+#include "chess/types.h"     // Defines Value, GameResult, kValueMate, Move etc.
 #include "chess/gamestate.h"
-#include "chess/position.h" // <<< Defines PositionHash
+#include "chess/position.h" // Defines PositionHash
 #include "neural/encoder.h"
 #include "proto/net.pb.h"
 #include "utils/mutex.h"
+
 
 namespace lczero {
 namespace classic {
