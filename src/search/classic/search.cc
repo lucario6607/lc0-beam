@@ -149,6 +149,37 @@ class MEvaluator {
   bool parent_within_threshold_ = false;
 };
 
+// --- Moved Helper functions outside anonymous namespace ---
+inline float GetFpu(const SearchParams& params, Node* node, bool is_root_node,
+                    float draw_score) {
+  const auto value = params.GetFpuValue(is_root_node);
+  return params.GetFpuAbsolute(is_root_node)
+             ? value
+             : -node->GetQ(-draw_score) -
+                   value * std::sqrt(node->GetVisitedPolicy());
+}
+
+// Faster version for if visited_policy is readily available already.
+inline float GetFpu(const SearchParams& params, Node* node, bool is_root_node,
+                    float draw_score, float visited_pol) {
+  const auto value = params.GetFpuValue(is_root_node);
+  return params.GetFpuAbsolute(is_root_node)
+             ? value
+             : -node->GetQ(-draw_score) - value * std::sqrt(visited_pol);
+}
+
+inline float ComputeCpuct(const SearchParams& params, uint32_t N,
+                          bool is_root_node) {
+  const float init = params.GetCpuct(is_root_node);
+  const float k = params.GetCpuctFactor(is_root_node);
+  const float base = params.GetCpuctBase(is_root_node);
+  // Use CpuctExponent here
+  return (init + (k ? k * FastLog((N + base) / base) : 0.0f)) *
+         std::pow(std::max((float)N, 1e-5f), params.GetCpuctExponent(is_root_node));
+}
+// --- End Moved Helper functions ---
+
+
 }  // namespace
 
 Search::Search(const NodeTree& tree, Backend* backend,
@@ -203,7 +234,7 @@ Search::Search(const NodeTree& tree, Backend* backend,
   last_root_beam_update_visits_ = 0; // Initialize last update tracker
 }
 
-namespace {
+namespace { // Keep ApplyDirichletNoise local
 void ApplyDirichletNoise(Node* node, float eps, double alpha) {
   float total = 0;
   std::vector<float> noise;
@@ -227,6 +258,7 @@ void ApplyDirichletNoise(Node* node, float eps, double alpha) {
 // --- Root Beam Search Implementation ---
 
 // Helper function to calculate PUCT score (extracted for reuse)
+// Moved *outside* anonymous namespace so it can be called by UpdateRootBeam
 inline float CalculatePuctScore(const SearchParams& params, Node* parent, const EdgeAndNode& child_edge,
                                 float fpu, float draw_score, const MEvaluator& m_evaluator) {
     const float Q = child_edge.GetQ(fpu, draw_score);
@@ -339,7 +371,7 @@ void Search::UpdateRootBeam(Node* root_node) REQUIRES(nodes_mutex_) {
 // --- End Root Beam Search Implementation ---
 
 
-namespace {
+namespace { // Keep WDLRescale local
 // WDL conversion formula based on random walk model.
 inline double WDLRescale(float& v, float& d, float wdl_rescale_ratio,
                          float wdl_rescale_diff, float sign, bool invert,
@@ -554,36 +586,8 @@ float Search::GetDrawScore(bool is_odd_depth) const {
               : -params_.GetDrawScore());
 }
 
-
-namespace {
-inline float GetFpu(const SearchParams& params, Node* node, bool is_root_node,
-                    float draw_score) {
-  const auto value = params.GetFpuValue(is_root_node);
-  return params.GetFpuAbsolute(is_root_node)
-             ? value
-             : -node->GetQ(-draw_score) -
-                   value * std::sqrt(node->GetVisitedPolicy());
-}
-
-// Faster version for if visited_policy is readily available already.
-inline float GetFpu(const SearchParams& params, Node* node, bool is_root_node,
-                    float draw_score, float visited_pol) {
-  const auto value = params.GetFpuValue(is_root_node);
-  return params.GetFpuAbsolute(is_root_node)
-             ? value
-             : -node->GetQ(-draw_score) - value * std::sqrt(visited_pol);
-}
-
-inline float ComputeCpuct(const SearchParams& params, uint32_t N,
-                          bool is_root_node) {
-  const float init = params.GetCpuct(is_root_node);
-  const float k = params.GetCpuctFactor(is_root_node);
-  const float base = params.GetCpuctBase(is_root_node);
-  // Use CpuctExponent here
-  return (init + (k ? k * FastLog((N + base) / base) : 0.0f)) *
-         std::pow(std::max((float)N, 1e-5f), params.GetCpuctExponent(is_root_node));
-}
-}  // namespace
+// --- Moved Helper functions definition outside anonymous namespace ---
+// Definitions were already moved above, this keeps the note consistent.
 
 std::vector<std::string> Search::GetVerboseStats(Node* node) const {
   assert(node == root_node_ || node->GetParent() == root_node_);
@@ -733,7 +737,10 @@ PositionHistory Search::GetPositionHistoryAtNode(const Node* node) const {
   PositionHistory history(played_history_);
   std::vector<Move> rmoves;
   for (const Node* n = node; n != root_node_; n = n->GetParent()) {
-    rmoves.push_back(n->GetOwnEdge()->GetMove());
+      if (!n->GetParent()) break; // Stop if parent is null (should only happen for root)
+      Edge* own_edge = n->GetOwnEdge();
+      if (!own_edge) break; // Should not happen for non-root nodes
+      rmoves.push_back(own_edge->GetMove());
   }
   for (auto it = rmoves.rbegin(); it != rmoves.rend(); it++) {
     history.Append(*it);
@@ -1941,7 +1948,7 @@ void SearchWorker::PickNodesToExtendTask(
 
                 if (current_score[allowed_idx] < -1.0f) {
                      float p = current_pol[allowed_idx];
-                     // Policy boosting logic removed as it wasn't present in this file version
+                     // No policy boosting logic here
                      current_score[allowed_idx] = p * puct_mult / (1 + nstarted) + util;
                 }
 
@@ -1978,7 +1985,7 @@ void SearchWorker::PickNodesToExtendTask(
                 const float util = current_util[idx]; // Calculate util before potential boosting
                 if (idx > cache_filled_idx) {
                    float p = current_pol[idx];
-                   // Policy boosting logic removed
+                   // No policy boosting logic
                    current_score[idx] = p * puct_mult / (1 + nstarted) + util;
                    cache_filled_idx++;
                 }
