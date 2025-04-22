@@ -170,7 +170,9 @@ class SearchParams {
   bool GetSearchSpinBackoff() const { return kSearchSpinBackoff; }
 
   // --- Root Beam Search ADDED ---
-  int GetRootBeamWidth() const { return kRootBeamWidth; }
+  int GetRootBeamWidth() const { return kRootBeamWidth; } // Keep old name for compatibility if needed
+  int GetRootBeamMinWidth() const { return kRootBeamMinWidth; } // Add new getter
+  int GetRootBeamMaxWidth() const { return kRootBeamMaxWidth; } // Add new getter
   int GetRootBeamUpdateThreshold() const { return kRootBeamUpdateThreshold; }
   int GetRootBeamUpdateInterval() const { return kRootBeamUpdateInterval; }
   // --- END Root Beam Search ADDED ---
@@ -251,7 +253,9 @@ class SearchParams {
   static const OptionId kSearchSpinBackoffId;
 
   // --- Root Beam Search ADDED ---
-  static const OptionId kRootBeamWidthId;
+  static const OptionId kRootBeamWidthId; // Keep old ID, maybe rename later
+  static const OptionId kRootBeamMinWidthId; // New ID
+  static const OptionId kRootBeamMaxWidthId; // New ID
   static const OptionId kRootBeamUpdateThresholdId;
   static const OptionId kRootBeamUpdateIntervalId;
   // --- END Root Beam Search ADDED ---
@@ -300,7 +304,7 @@ class SearchParams {
   const float kWDLMaxS; // Added member
   const float kWDLEvalObjectivity;
   const float kMaxOutOfOrderEvalsFactor; // Changed type and name
-  const uint32_t kMaxOutOfOrderEvals; // Added derived member
+  uint32_t kMaxOutOfOrderEvals; // Changed to non-const, now derived
   const float kNpsLimit;
   const int kSolidTreeThreshold; // Added member
   const int kTaskWorkersPerSearchWorker;
@@ -315,7 +319,9 @@ class SearchParams {
   const float kMaxCollisionVisitsScalingPower;
   const bool kSearchSpinBackoff;
   // --- Root Beam Search ADDED ---
-  const int kRootBeamWidth;
+  const int kRootBeamWidth; // Keep old name, maybe rename later
+  const int kRootBeamMinWidth; // New member
+  const int kRootBeamMaxWidth; // New member
   const int kRootBeamUpdateThreshold;
   const int kRootBeamUpdateInterval;
   // --- END Root Beam Search ADDED ---
