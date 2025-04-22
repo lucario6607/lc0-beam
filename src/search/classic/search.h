@@ -238,7 +238,7 @@ class SearchWorker {
         int working_threads = std::max(
             search_->thread_count_.load(std::memory_order_acquire) - 1, 1);
         task_workers_ = std::min(
-            std::thread::hardware_concurrency() / working_threads - 1, 4U);
+            (unsigned int)std::thread::hardware_concurrency() / working_threads - 1, 4U); // Cast hardware_concurrency to unsigned int
       }
     }
     for (int i = 0; i < task_workers_; i++) {
