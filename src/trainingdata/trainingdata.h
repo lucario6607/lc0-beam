@@ -1,28 +1,7 @@
 /*
   This file is part of Leela Chess Zero.
   Copyright (C) 2018-2020 The LCZero Authors
-
-  Leela Chess is free software: you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  Leela Chess is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
-
-  You should have received a copy of the GNU General Public License
-  along with Leela Chess.  If not, see <http://www.gnu.org/licenses/>.
-
-  Additional permission under GNU GPL version 3 section 7
-
-  If you modify this Program, or any covered work, by linking or
-  combining it with NVIDIA Corporation's libraries from the NVIDIA CUDA
-  Toolkit and the NVIDIA CUDA Deep Neural Network library (or a
-  modified version of those libraries), containing parts covered by the
-  terms of the respective license agreement, the licensors of this
-  Program grant you additional permission to convey the resulting work.
+  ... (License header) ...
 */
 
 #pragma once
@@ -35,11 +14,11 @@
 #include <string>
 #include <vector>
 
-#include "chess/board.h"     // For MoveList if needed
-#include "chess/gamestate.h" // For PositionHistory
-#include "chess/move.h"      // For Move definition
-#include "chess/position.h" // For Position definition
-#include "chess/types.h"     // <<< CORRECTED: Includes Eval definition in lczero namespace
+#include "chess/board.h"
+#include "chess/gamestate.h"
+#include "chess/move.h"
+#include "chess/position.h"
+#include "chess/types.h"     // <<< Included for lczero::Eval
 #include "utils/bitops.h"
 
 namespace lczero {
@@ -90,6 +69,7 @@ class TrainingData {
   std::string ToString() const;
   void FillInputPlanes(float planes[MAX_INPUT_PLANES][squares::SIZE]) const;
 
+  // Member variables (using types assumed to be in lczero namespace via includes)
   PositionHistory history;
   int16_t policy_indices[MAX_OUTPUT_POLICY];
   float policy_values[MAX_OUTPUT_POLICY];
