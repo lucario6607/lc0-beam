@@ -17,7 +17,7 @@
 #include <utility>
 
 // Corrected Includes (Using chess/ prefix consistently)
-#include "chess/callbacks.h" // Defines ThinkingInfo, IterationStats, StoppersHints (assume accessible)
+#include "chess/callbacks.h" // Defines ThinkingInfo, IterationStats, StoppersHints
 #include "chess/types.h"     // Defines Value, Move, Eval, kValueMate etc.
 #include "chess/position.h" // Defines PositionHash, Position
 #include "chess/uciloop.h"   // Defines UciResponder
@@ -38,7 +38,7 @@
 namespace lczero {
 namespace classic {
 
-// Define constants using types from lczero namespace (likely accessible via types.h)
+// Define constants using types from types.h (should be accessible here)
 constexpr Value kValueKnownWin = kValueMate; // <<< NO lczero::
 constexpr Value kValueKnownLoss = -kValueMate; // <<< NO lczero::
 
@@ -47,7 +47,7 @@ constexpr Value kValueKnownLoss = -kValueMate; // <<< NO lczero::
 
 class Search {
  public:
-  // Constructor uses types likely defined in global lczero namespace or accessible
+  // Use unqualified types where they are defined in included headers and accessible
   Search(const NodeTree& tree, Backend* network,
          std::unique_ptr<UciResponder> uci_responder,
          const MoveList& searchmoves,
