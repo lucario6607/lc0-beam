@@ -355,6 +355,8 @@ class VisitedNode_Iterator {
    NodePtr parent_node_ = nullptr;       // Node whose children are being iterated
    NodePtr current_node_ptr_ = nullptr;  // Pointer to the current visited node
    uint16_t current_idx_ = 0;            // Current index (only used if solid)
+   uint16_t total_count_ = 0;            // Total number of edges (only used if solid)
+   bool solid_ = false;                  // Whether children are solid
 };
 
 
