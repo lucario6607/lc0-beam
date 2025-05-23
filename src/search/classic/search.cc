@@ -40,7 +40,6 @@
 #include <thread>
 #include <vector> // Added for std::vector
 
-#include "chess/chess.h"     // Added for Value, GameResult etc.
 #include "chess/position.h" // Added for PositionHash
 #include "neural/encoder.h"
 #include "search/classic/node.h"

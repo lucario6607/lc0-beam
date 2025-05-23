@@ -32,6 +32,7 @@
 #include "chess/uciloop.h"
 #include "neural/backend.h"
 #include "search/classic/search.h"
+#include "search/classic/nodetree.h" // Added for full NodeTree definition
 #include "search/classic/stoppers/stoppers.h"
 #include "trainingdata/trainingdata.h"
 #include "utils/optionsparser.h"
@@ -101,7 +102,7 @@ class SelfPlayGame {
   PlayerOptions options_[2];
   // Node tree for player1 and player2. If the tree is shared between players,
   // tree_[0] == tree_[1].
-  std::shared_ptr<classic::NodeTree> tree_[2];
+  std::shared_ptr<lczero::classic::NodeTree> tree_[2];
   std::string orig_fen_;
   int start_ply_;
 

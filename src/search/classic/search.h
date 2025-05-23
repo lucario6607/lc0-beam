@@ -33,8 +33,7 @@
 #include "proto/net.pb.h"       // Defines EvalResult
 #include "search/classic/node.h" // Includes node.h (which includes its own dependencies like types.h)
 #include "search/classic/params.h" // Defines classic::SearchParams, classic::ContemptMode
-#include "search/search_stopper.h" // Defines lczero::SearchStopper, lczero::StoppersHints
-#include "search/stats.h"       // Defines lczero::IterationStats
+#include "search/classic/stoppers/timemgr.h" // Defines lczero::SearchStopper, lczero::StoppersHints
 #include "syzygy/syzygy.h"      // Defines lczero::SyzygyTablebase
 #include "utils/optionsdict.h"  // Defines lczero::OptionsDict
 #include "utils/mutex.h"        // Defines Mutex, SharedMutex
@@ -51,6 +50,8 @@ class SearchWorker; // Forward declare worker class
 
 
 namespace lczero {
+using IterationStats = classic::IterationStats;
+using StoppersHints = classic::StoppersHints;
 namespace classic {
 
 // Constants defined using types from lczero namespace
@@ -63,7 +64,7 @@ class Search {
          std::unique_ptr<lczero::UciResponder> uci_responder,
          const lczero::MoveList& searchmoves,
          std::chrono::steady_clock::time_point start_time,
-         std::unique_ptr<lczero::SearchStopper> stopper,
+         std::unique_ptr<lczero::classic::SearchStopper> stopper,
          bool infinite, bool ponder,
          const lczero::OptionsDict& options, lczero::SyzygyTablebase* syzygy_tb);
 
@@ -104,7 +105,7 @@ class Search {
   void CancelSharedCollisions() REQUIRES(nodes_mutex_);
   lczero::PositionHistory GetPositionHistoryAtNode(const Node* node) const; // <<< Uses lczero::PositionHistory
 
-  // void StoreTT(lczero::PositionHash hash, Node* node); // <<< Uses lczero::PositionHash (Commented out as likely unused/misplaced)
+  // void StoreTT(uint64_t hash, Node* node); // <<< Uses lczero::PositionHash (Commented out as likely unused/misplaced)
 
 
   mutable Mutex counters_mutex_ ACQUIRED_AFTER(nodes_mutex_);
@@ -114,7 +115,7 @@ class Search {
   bool bestmove_is_sent_ GUARDED_BY(counters_mutex_) = false;
   lczero::Move final_bestmove_ GUARDED_BY(counters_mutex_); // <<< Uses lczero::Move
   lczero::Move final_pondermove_ GUARDED_BY(counters_mutex_); // <<< Uses lczero::Move
-  std::unique_ptr<lczero::SearchStopper> stopper_ GUARDED_BY(counters_mutex_); // <<< Uses lczero::SearchStopper
+  std::unique_ptr<lczero::classic::SearchStopper> stopper_ GUARDED_BY(counters_mutex_); // <<< Uses lczero::SearchStopper
 
   Mutex threads_mutex_;
   std::vector<std::thread> threads_ GUARDED_BY(threads_mutex_);

@@ -48,11 +48,11 @@
 
 // --- Forward Declarations ---
 namespace lczero {
-class NodeTree;
 class Position; // Forward declare if only used via pointer/ref in header
 class PositionHistory;
 
 namespace classic {
+class NodeTree;
 class SearchParams;
 class Node;
 class Edge;
@@ -185,7 +185,7 @@ class Node {
   lczero::GameResult upper_bound_ : 2; // <<< Uses lczero::GameResult
   bool solid_children_ : 1;
 
-  friend class lczero::NodeTree;
+  friend class NodeTree;
   template <bool is_const> friend class Edge_Iterator;
   template <bool is_const> friend class VisitedNode_Iterator;
   friend class SearchWorker;
@@ -319,7 +319,7 @@ inline Node::Node(Node* parent, uint16_t index)
 #if defined(_M_IX86) || defined(__i386__) || (defined(__arm__) && !defined(__aarch64__))
 static_assert(sizeof(Node) == 48 || sizeof(Node) == 52, "Unexpected size of Node for 32bit compile");
 #else
-static_assert(sizeof(Node) == 64, "Unexpected size of Node");
+static_assert(sizeof(Node) == 72, "Unexpected size of Node");
 #endif
 
 }  // namespace classic

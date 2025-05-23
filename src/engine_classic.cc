@@ -31,15 +31,17 @@
 
 // --- Core LC0 Type Definitions FIRST ---
 #include "chess/types.h"           // Defines Value, Move, Eval, GameResult etc.
-#include "search/stats.h"          // Defines IterationStats
-#include "search/search_stopper.h" // Defines SearchStopper, StoppersHints
+#include "search/classic/stoppers/timemgr.h" // Defines SearchStopper, StoppersHints
 #include "proto/net.pb.h"          // Defines EvalResult
 
 // --- Other LC0 System Includes ---
-#include "config.h"
+#include "build_id.h"
 #include "neural/network.h"
-#include "tree/nodetree.h"
-#include "uci/uciresponder.h"
+#include "search/classic/nodetree.h"
+#include "chess/uciloop.h"
+#include "utils/commandline.h" // Added
+#include "search/classic/stoppers/common.h" // Added
+#include "search/classic/stoppers/factory.h" // Added
 // ... any other base system includes needed ...
 
 // --- Engine/Search Specific Includes ---
@@ -264,8 +266,8 @@ void EngineClassic::Go(const GoParams& params) {
     std::string ponder_move = moves.back();
     moves.pop_back();
     SetupPosition(current_position_.fen, moves);
-    Move move = tree_->HeadPosition().GetBoard().ParseMove(ponder_move);
-    if (tree_->IsBlackToMove()) move.Flip();
+    Move move = tree_->GetPositionHistory().Last().GetBoard().ParseMove(ponder_move);
+    if (tree_->GetPositionHistory().IsBlackToMove()) move.Flip();
     responder =
         std::make_unique<PonderResponseTransformer>(std::move(responder), move);
   } else {
@@ -279,7 +281,7 @@ void EngineClassic::Go(const GoParams& params) {
   auto stopper = time_manager_->GetStopper(params, *tree_.get());
   search_ = std::make_unique<classic::Search>(
       *tree_, backend_.get(), std::move(responder),
-      StringsToMovelist(params.searchmoves, tree_->HeadPosition().GetBoard()),
+      StringsToMovelist(params.searchmoves, tree_->GetPositionHistory().Last().GetBoard()),
       *move_start_time_, std::move(stopper), params.infinite, params.ponder,
       options_, syzygy_tb_.get());
 

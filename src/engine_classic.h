@@ -33,6 +33,7 @@
 #include "neural/factory.h"
 #include "neural/memcache.h"
 #include "search/classic/search.h"
+#include "search/classic/nodetree.h" // Added for full NodeTree definition
 #include "syzygy/syzygy.h"
 #include "utils/mutex.h"
 
@@ -92,7 +93,7 @@ class EngineClassic : public EngineControllerBase {
 
   std::unique_ptr<classic::TimeManager> time_manager_;
   std::unique_ptr<classic::Search> search_;
-  std::unique_ptr<classic::NodeTree> tree_;
+  std::unique_ptr<lczero::classic::NodeTree> tree_;
   std::unique_ptr<SyzygyTablebase> syzygy_tb_;
   std::unique_ptr<CachingBackend> backend_;
 

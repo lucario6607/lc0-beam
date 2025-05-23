@@ -31,15 +31,16 @@
 
 // --- Core LC0 Type Definitions FIRST ---
 #include "chess/types.h"           // Defines Value, Move, Eval, GameResult etc.
-#include "search/stats.h"          // Defines IterationStats
-#include "search/search_stopper.h" // Defines SearchStopper, StoppersHints
+#include "search/classic/stoppers/timemgr.h" // Defines SearchStopper, StoppersHints
 #include "proto/net.pb.h"          // Defines EvalResult
 
 // --- Other LC0 System Includes ---
-#include "config.h"
+#include "build_id.h"
+#include "utils/configfile.h" // Added
+#include "engine.h"           // Added
 #include "neural/network.h"
-#include "tree/nodetree.h"
-#include "uci/uciresponder.h"
+#include "search/classic/nodetree.h"
+#include "chess/uciloop.h"
 // ... any other base system includes needed ...
 
 // --- Engine/Search Specific Includes ---

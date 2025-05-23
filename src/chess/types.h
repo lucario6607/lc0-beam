@@ -33,6 +33,23 @@
 
 namespace lczero {
 
+// Placeholder for lczero::Value
+using Value = float; // Common for NN outputs, represents win/loss strength
+
+// Placeholder for kValueMate and other common values
+constexpr Value kValueMate      = 1.0f;  // Max score, representing mate
+constexpr Value kValueDraw      = 0.0f;
+
+// Placeholder for lczero::Eval
+struct Eval {
+  Value value; // The main evaluation score (win/loss/draw strength)
+  float d;     // Draw probability component (if applicable)
+  float m;     // Moves left / Mate score component (if applicable)
+
+  // Default constructor
+  Eval(Value v_ = 0.0f, float d_ = 0.0f, float m_ = 0.0f) : value(v_), d(d_), m(m_) {}
+};
+
 struct PieceType {
   uint8_t idx;
   static constexpr PieceType FromIdx(uint8_t idx) { return PieceType{idx}; }

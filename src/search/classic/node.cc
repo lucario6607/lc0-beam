@@ -26,6 +26,7 @@
 */
 
 #include "search/classic/node.h" // Adjusted include path
+#include "search/classic/nodetree.h" // Added include for NodeTree definition
 
 #include <absl/algorithm/container.h>
 
