@@ -43,8 +43,6 @@
 #include "chess/position.h" // Added for PositionHash
 #include "neural/encoder.h"
 #include "search/classic/node.h"
-#include "search/search_stopper.h" // Added for StoppersHints
-#include "search/stats.h"          // Added for IterationStats
 #include "utils/fastmath.h"
 #include "utils/random.h"
 #include "utils/spinhelper.h"

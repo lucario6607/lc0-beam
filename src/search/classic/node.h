@@ -29,6 +29,7 @@
 
 // --- Core Type Definitions FIRST ---
 #include "chess/types.h"     // Defines lczero::Value, lczero::GameResult, lczero::Move, lczero::MoveList etc.
+#include "chess/position.h"  // Added for Position and potentially related types
 
 // --- Standard Library Includes ---
 #include <algorithm>

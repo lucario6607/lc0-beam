@@ -171,12 +171,6 @@ class SearchParams {
   }
   bool GetSearchSpinBackoff() const { return kSearchSpinBackoff; }
 
-  // --- Root Beam Search ADDED ---
-  int GetRootBeamWidth() const { return kRootBeamWidth; }
-  int GetRootBeamUpdateThreshold() const { return kRootBeamUpdateThreshold; }
-  int GetRootBeamUpdateInterval() const { return kRootBeamUpdateInterval; }
-  // --- END Root Beam Search ADDED ---
-
   // Search parameter IDs.
   static const OptionId kMiniBatchSizeId;
   static const OptionId kMaxPrefetchBatchId; // Added ID
@@ -252,12 +246,6 @@ class SearchParams {
   static const OptionId kUCIRatingAdvId;
   static const OptionId kSearchSpinBackoffId;
 
-  // --- Root Beam Search ADDED ---
-  static const OptionId kRootBeamWidthId;
-  static const OptionId kRootBeamUpdateThresholdId;
-  static const OptionId kRootBeamUpdateIntervalId;
-  // --- END Root Beam Search ADDED ---
-
  private:
   const OptionsDict& options_;
   // Cached parameter values. Values have to be cached if either:
@@ -316,11 +304,6 @@ class SearchParams {
   const int kMaxCollisionVisitsScalingEnd;
   const float kMaxCollisionVisitsScalingPower;
   const bool kSearchSpinBackoff;
-  // --- Root Beam Search ADDED ---
-  const int kRootBeamWidth;
-  const int kRootBeamUpdateThreshold;
-  const int kRootBeamUpdateInterval;
-  // --- END Root Beam Search ADDED ---
   // Removed members related to features not obviously present in the provided header:
   // kCpuctUtilityStdevPrior, kCpuctUtilityStdevScale, kCpuctUtilityStdevPriorWeight,
   // kUseVarianceScaling, kMoveRuleBucketing, kUncertaintyWeightingCap,

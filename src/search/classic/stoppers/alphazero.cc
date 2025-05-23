@@ -26,6 +26,7 @@
 */
 
 #include "search/classic/stoppers/stoppers.h"
+#include "search/classic/nodetree.h" // Added for NodeTree full definition
 
 namespace lczero {
 namespace classic {
@@ -51,7 +52,7 @@ class AlphazeroTimeManager : public TimeManager {
 
 std::unique_ptr<SearchStopper> AlphazeroTimeManager::GetStopper(
     const GoParams& params, const NodeTree& tree) {
-  const Position& position = tree.HeadPosition();
+  const Position& position = tree.GetPositionHistory().Last();
   const bool is_black = position.IsBlackToMove();
   const std::optional<int64_t>& time = (is_black ? params.btime : params.wtime);
   // If no time limit is given, don't stop on this condition.

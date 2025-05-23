@@ -489,18 +489,6 @@ const OptionId SearchParams::kSearchSpinBackoffId{
     "search-spin-backoff", "SearchSpinBackoff",
     "Enable backoff for the spin lock that acquires available searcher."};
 
-// --- Root Beam Search ADDED ---
-const OptionId SearchParams::kRootBeamWidthId{
-    "root-beam-width", "RootBeamWidth",
-    "If > 0, restricts search to the top N most visited root moves after an initial threshold. 0 disables."};
-const OptionId SearchParams::kRootBeamUpdateThresholdId{
-    "root-beam-update-threshold", "RootBeamUpdateThreshold",
-    "Number of root visits after which the root beam is calculated and activated."};
-const OptionId SearchParams::kRootBeamUpdateIntervalId{
-    "root-beam-update-interval", "RootBeamUpdateInterval",
-    "Recalculate root beam every N root visits after initial activation. 0 disables re-evaluation."};
-// --- END Root Beam Search ADDED ---
-
 
 void SearchParams::Populate(OptionsParser* options) {
   // Here the uci optimized defaults" are set.
@@ -599,12 +587,6 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<FloatOption>(kUCIRatingAdvId, -10000.0f, 10000.0f) = 0.0f;
   options->Add<BoolOption>(kSearchSpinBackoffId) = false;
 
-  // --- Root Beam Search ADDED ---
-  options->Add<IntOption>(kRootBeamWidthId, 0, 500) = 0; // Disabled by default
-  options->Add<IntOption>(kRootBeamUpdateThresholdId, 0, 1000000) = 100;
-  options->Add<IntOption>(kRootBeamUpdateIntervalId, 0, 10000000) = 0; // Disabled by default
-  // --- END Root Beam Search ADDED ---
-
 
   options->HideOption(kNoiseEpsilonId);
   options->HideOption(kNoiseAlphaId);
@@ -628,11 +610,6 @@ void SearchParams::Populate(OptionsParser* options) {
   options->HideOption(kWDLMaxSId); // Added hide
   options->HideOption(kWDLDrawRateTargetId);
   options->HideOption(kWDLBookExitBiasId);
-  // --- Root Beam Search - UNCOMMENT/REMOVE HideOption TO MAKE VISIBLE IN UCI ---
-  // options->HideOption(kRootBeamWidthId);
-  // options->HideOption(kRootBeamUpdateThresholdId);
-  // options->HideOption(kRootBeamUpdateIntervalId);
-  // --- END Root Beam Search ---
 }
 
 SearchParams::SearchParams(const OptionsDict& options)
@@ -727,11 +704,6 @@ SearchParams::SearchParams(const OptionsDict& options)
       kMaxCollisionVisitsScalingPower(
           options.Get<float>(kMaxCollisionVisitsScalingPowerId)),
       kSearchSpinBackoff(options_.Get<bool>(kSearchSpinBackoffId)),
-      // --- Root Beam Search ADDED ---
-      kRootBeamWidth(options.Get<int>(kRootBeamWidthId)),
-      kRootBeamUpdateThreshold(options.Get<int>(kRootBeamUpdateThresholdId)),
-      kRootBeamUpdateInterval(options.Get<int>(kRootBeamUpdateIntervalId)),
-      // --- END Root Beam Search ADDED ---
       // Removed initializers for features not present in the corrected params.h
       kMaxOutOfOrderEvals(std::max( // Calculation now inside constructor body
           1, static_cast<int>(kMaxOutOfOrderEvalsFactor *
